@@ -1,0 +1,28 @@
+flowchart TD
+    A["Freeze naming decision"] --> B["Define canonical map<br/>Sundrop Music = harvest/source<br/>Sundrop Cloud = vault/publishing/admin<br/>Sundrop Vault = preservation surface"]
+    B --> C["Create naming + domain policy docs"]
+    C --> D["Add centralized product/domain constants in code"]
+    D --> E["Replace hardcoded product names in UI"]
+    D --> F["Replace hardcoded domain/origin references in code"]
+    E --> G["Update public UX/UI copy<br/>home, vault, signup, login, control center, legal, emails"]
+    F --> H["Audit domain-dependent functions"]
+    H --> I["Update auth and callback behavior<br/>Firebase domains, OAuth redirects, magic links, generated URLs"]
+    I --> J["Update runtime/env config<br/>public origins, email links, deep links, operator links"]
+    G --> K["Prepare dual-domain launch"]
+    J --> K
+    K --> L["Stand up sundrop.cloud"]
+    K --> M["Stand up sundrop.music"]
+    L --> N["Validate Sundrop Cloud flows<br/>vault, signup, login, control center, publishing"]
+    M --> O["Validate Sundrop Music flows<br/>harvest, source tools, playlist/url tools"]
+    N --> P{"Both domain families stable?"}
+    O --> P
+    P -- "No" --> Q["Fix code/config/integration gaps"]
+    Q --> N
+    Q --> O
+    P -- "Yes" --> R["Switch canonical product links to new domains"]
+    R --> S["Add redirects from legacy domains"]
+    S --> T["Monitor runtime health<br/>auth, export, queue, emails, publishing"]
+    T --> U{"Stable after transition window?"}
+    U -- "No" --> V["Rollback link primaries or repair targeted breakage"]
+    V --> T
+    U -- "Yes" --> W["Assess optional infrastructure renames later<br/>buckets, services, repos, env vars"]

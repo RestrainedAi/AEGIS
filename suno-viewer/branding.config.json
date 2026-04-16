@@ -1,0 +1,19 @@
+{
+  "productNames": {
+    "cloud": "Sundrop Cloud",
+    "vault": "Sundrop Vault",
+    "music": "Sundrop Music",
+    "legacyWorkspace": "Sundrop Legacy Workspace"
+  },
+  "domains": {
+    "cloudOrigin": "https://sundrop.cloud",
+    "musicOrigin": "https://sundrop.music"
+  },
+  "keys": {
+    "emailLinkStorage": "sundrop-cloud-email-link",
+    "activePlayerEvent": "sundrop:vault-audio-active"
+  },
+  "legacy": {
+    "workspaceId": "legacy-sundrop"
+  }
+}

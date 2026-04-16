@@ -1,0 +1,43 @@
+
+```
+flowchart TD
+...
+```
+
+//PUPPETEER_EXECUTABLE_PATH="$(which chromium-browser || which chromium || which google-chrome)" mmdc -p /tmp/mermaid-config.json -i "enviroment/AEGIS/docs/codex/mermaid.mmd" -o "enviroment/AEGIS/docs/codex/mermaid.svg"
+
+
+
+//PUPPETEER_EXECUTABLE_PATH="$(which chromium-browser || which chromium || which google-chrome)" mmdc -p /tmp/mermaid-config.json -i "enviroment/AEGIS/docs/codex/ domain-migration-flow.mmd" -o "enviroment/AEGIS/docs/codex/domain-migration-flow.svg"
+ 
+
+```mermaid
+flowchart TD
+    A["Freeze naming decision"] --> B["Define canonical map<br/>Sundrop Music = harvest/source<br/>Sundrop Cloud = vault/publishing/admin<br/>Sundrop Vault = preservation surface"]
+    B --> C["Create naming + domain policy docs"]
+    C --> D["Add centralized product/domain constants in code"]
+    ...
+
+
+
+//Then run:
+
+```bash
+PUPPETEER_EXECUTABLE_PATH="$(which chromium-browser || which chromium || which google-chrome)" mmdc -p /tmp/mermaid-config.json -i "enviroment/AEGIS/docs/codex/mermaid.md" -o "enviroment/AEGIS/docs/codex/mermaid.svg"
+
+
+// sudo apt update && sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libatspi2.0-0 libgtk-3-0
+
+// mmdc -i "enviroment/AEGIS/docs/codex/mermaid.mmd" -o "enviroment/AEGIS/docs/codex/mermaid.svg"
+
+
+//
+cat >/tmp/mermaid-config.json <<'EOF'
+{
+  "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+}
+EOF
+
+PUPPETEER_EXECUTABLE_PATH="$(which chromium-browser || which chromium || which google-chrome)" mmdc -p /tmp/mermaid-config.json -i "enviroment/AEGIS/docs/codex/mermaid.mmd" -o "enviroment/AEGIS/docs/codex/mermaid.svg"
+//
+

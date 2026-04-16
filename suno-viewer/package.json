@@ -1,0 +1,31 @@
+{
+  "name": "suno-viewer",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "serve": "node server.js"
+  },
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@google-cloud/storage": "^7.0.0",
+    "archiver": "^7.0.1",
+    "csv-parse": "^6.2.1",
+    "express": "^4.18.2",
+    "firebase": "^12.11.0",
+    "firebase-admin": "^12.7.0",
+    "nodemailer": "^6.10.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "wavesurfer.js": "^7.7.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0"
+  }
+}

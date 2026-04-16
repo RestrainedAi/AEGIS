@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Suno Catalog Viewer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 16px; }
+    input { width: 100%; padding: 10px; margin: 10px 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    th { position: sticky; top: 0; background: #111; color: #fff; text-align: left; }
+    .small { color:#666; font-size: 12px; }
+    .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; margin-right:6px; }
+    code { background:#f5f5f5; padding:2px 6px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <h2>🎧 Suno Catalog Viewer</h2>
+  <div class="small">Data source: <code>/catalog.csv</code> (served privately by Cloud Run)</div>
+  <input id="q" placeholder="Search anything…" />
+  <div id="status" class="small"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>SongKey</th>
+        <th>Account</th>
+        <th>Audio</th>
+        <th>Video</th>
+        <th>Thumb</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+<script>
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const header = lines[0].split(",");
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    let cols = [];
+    let cur = "", inQ = false;
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+      if (ch === '"') { inQ = !inQ; continue; }
+      if (ch === "," && !inQ) { cols.push(cur); cur = ""; continue; }
+      cur += ch;
+    }
+    cols.push(cur);
+    const obj = {};
+    for (let k = 0; k < header.length; k++) obj[header[k]] = cols[k] || "";
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function showValue(v) {
+  if (!v) return "<span class='small'>—</span>";
+  return "<span class='small'>" + v + "</span>";
+}
+
+let ALL = [];
+function render(rows) {
+  const tbody = document.getElementById("rows");
+  tbody.innerHTML = "";
+  rows.forEach(r => {
+    const title = (r.title || "").slice(0, 160);
+    const key = r.songKey || "";
+    const acct = (r.account_handle || r.account_label || "").trim() || "—";
+    const audio = r.gcs_latest_audio || r.gcs_mp3 || "";
+    const video = r.gcs_latest_mp4 || r.gcs_mp4 || "";
+    const thumb = r.gcs_latest_thumb || r.gcs_thumb || "";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>" + title + "</td>" +
+      "<td class='small'>" + key + "</td>" +
+      "<td><span class='pill'>" + acct + "</span></td>" +
+      "<td>" + showValue(audio) + "</td>" +
+      "<td>" + showValue(video) + "</td>" +
+      "<td>" + showValue(thumb) + "</td>";
+    tbody.appendChild(tr);
+  });
+  document.getElementById("status").textContent = rows.length + " rows";
+}
+
+function applyFilter() {
+  const q = document.getElementById("q").value.toLowerCase().trim();
+  if (!q) return render(ALL);
+  render(ALL.filter(r => JSON.stringify(r).toLowerCase().includes(q)));
+}
+document.getElementById("q").addEventListener("input", applyFilter);
+
+fetch("/catalog.csv")
+  .then(r => r.text())
+  .then(t => { ALL = parseCSV(t); render(ALL); })
+  .catch(e => { document.getElementById("status").textContent = "Failed to load CSV: " + e; });
+</script>
+</body>
+</html>

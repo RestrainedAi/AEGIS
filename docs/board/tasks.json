@@ -1,0 +1,1074 @@
+[
+  {
+    "id": "AEGIS-001",
+    "title": "Confirm authoritative catalog export generator",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Stabilization",
+    "summary": "Confirm rebuild_catalog.py as export authority and document the viewer dependency path.",
+    "notes": "Validated on 2026-04-06. rebuild_catalog.py is the authoritative export generator, the viewer serves its GCS artifact, and live suno-harvest runtime verification passed against the deployed Cloud Run job.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-001_EXPORT_AUTHORITY_NOTE.md"
+    ]
+  },
+  {
+    "id": "AEGIS-002",
+    "title": "Standardize YouTube API environment naming",
+    "status": "Blocked",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Backend",
+    "stream": "Stabilization",
+    "summary": "Normalize runtime config to YOUTUBE_API_KEY with legacy alias support for YT_API_KEY.",
+    "notes": "Validated on 2026-04-07. TypeScript code resolves YOUTUBE_API_KEY first with legacy alias support, but the deployed yt-playlist-ingest runtime still exposes only YT_API_KEY. Runtime rollout remains incomplete.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-002_YOUTUBE_ENV_STANDARD.md"
+    ]
+  },
+  {
+    "id": "AEGIS-003",
+    "title": "Define dedicated ytUploadQueue schema",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Backend",
+    "stream": "Stabilization",
+    "summary": "Separate upload queue semantics from ingest/catalog records using ytUploadQueue.",
+    "notes": "Validated on 2026-04-07. Production queue rows are being created and processed in ytUploadQueue, proving the distribution queue is separated from sunoSongs.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-003_YTUPLOADQUEUE_SCHEMA.md"
+    ]
+  },
+  {
+    "id": "AEGIS-004",
+    "title": "Update queue manager to use ytUploadQueue",
+    "status": "Done",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Backend",
+    "stream": "Stabilization",
+    "summary": "Move queue processing off the overloaded items collection and onto ytUploadQueue.",
+    "notes": "Validated on 2026-04-07. Live queue items transitioned through ytUploadQueue from queued to done with startedAt, uploadedAt, and ytVideoId populated.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../../yt-ingest/queue_manager.py"
+    ]
+  },
+  {
+    "id": "AEGIS-005",
+    "title": "Align YouTube uploader with real SUNO media schema",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Backend",
+    "stream": "Stabilization",
+    "summary": "Resolve media from media.videoUrl and support gs:// parsing directly.",
+    "notes": "Validated on 2026-04-07. Live uploads succeeded from real sunoSongs docs using nested media.videoUrl values backed by gs:// aeonimus-suno-media objects.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-005_UPLOADER_SCHEMA_ALIGNMENT_NOTE.md"
+    ]
+  },
+  {
+    "id": "AEGIS-006",
+    "title": "Decide and implement post-harvest catalog rebuild orchestration",
+    "status": "Done",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Stabilization",
+    "summary": "Run rebuild_catalog.py after harvest and surface export metadata.",
+    "notes": "Validated on 2026-04-06. The checked-in Cloud Run harvest entrypoint includes inline rebuild_catalog.py execution, and live runtime verification plus successful recent executions confirmed the deployed suno-harvest job is running the expected shape.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-006_POST_HARVEST_REBUILD_NOTE.md"
+    ]
+  },
+  {
+    "id": "AEGIS-007",
+    "title": "Audit and remove checked-in secrets",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Security",
+    "stream": "Stabilization",
+    "summary": "Remove tracked OAuth secrets and move local/prod auth to safe secret paths.",
+    "notes": "Validated on 2026-04-07. client_secret.json remains removed from the repo, client_secret.example.json remains in place for safe onboarding, and remaining credential rotation is an external operational follow-up.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/AEGIS-007_SECRET_HANDLING_NOTE.md"
+    ]
+  },
+  {
+    "id": "AEGIS-008",
+    "title": "Document canonical ops entry points",
+    "status": "Done",
+    "priority": "P1",
+    "size": "S",
+    "owner": "Ops",
+    "stream": "Stabilization",
+    "summary": "Label scripts as active, transitional, or stale so engineers know the real entry points.",
+    "notes": "Completed on 2026-04-06 in docs/codex/AEGIS-008_CANONICAL_OPS_ENTRY_POINTS.md. The active paths were mapped, transitional duplicates were identified, and corrupted scheduler artifacts were explicitly called out.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md"
+    ]
+  },
+  {
+    "id": "AEGIS-009",
+    "title": "Add minimal export freshness visibility",
+    "status": "Done",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Stabilization",
+    "summary": "Expose last successful export timestamp without manual bucket inspection.",
+    "notes": "Completed on 2026-04-08. Export freshness is now surfaced through /api/admin/overview and the live Control Center, including generatedAt, rowCount, generator, and artifact path.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../../yt-ingest/rebuild_catalog.py",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-010",
+    "title": "Implement viewer-to-queue publish action",
+    "status": "Done",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Web App",
+    "stream": "Bridge",
+    "summary": "Complete the publish handoff from catalog UI to YouTube queueing.",
+    "notes": "Validated on 2026-04-07. The live Vault creates queue rows, yt-upload-job processes them successfully, and Firestore song docs receive durable ytStatus, ytVideoId, ytCanonicalUrl, and ytPublishedAt writeback.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md",
+      "../../suno-viewer/server.js",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "EPIC-11",
+    "title": "Define status taxonomy and operational UI model",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Product + Design",
+    "stream": "UX",
+    "summary": "Create shared status language across source, run, item, export, and queue states.",
+    "notes": "Design docs are in place; engineering mapping work remains.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md",
+      "../laplace/aegis-ux-requirements-spec-v1.md"
+    ]
+  },
+  {
+    "id": "EPIC-12",
+    "title": "Deliver UX handoff for core product surfaces",
+    "status": "Review",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Design",
+    "stream": "UX",
+    "summary": "Finalize implementation-ready UX requirements for Dashboard, Sources, Runs, Catalog, Item Detail, and Issues.",
+    "notes": "Most of the design handoff docs are already created in docs/design. Needs engineering sequencing and screen-by-screen implementation tickets.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md",
+      "../laplace/aegis-ui-ux-strategy-memo.md",
+      "../laplace/aegis-ux-requirements-spec-v1.md",
+      "../laplace/aegis-wireframe-brief-v1.md"
+    ]
+  },
+  {
+    "id": "EPIC-13",
+    "title": "Establish monitoring and operational visibility",
+    "status": "Done",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Operations",
+    "summary": "Make failures, staleness, backlog, and export freshness visible without deep code inspection.",
+    "notes": "Moved to In Progress on 2026-04-08. The Control Center now exposes auth posture, queue pulse, and export freshness. Remaining work is deeper alerting, failure dashboards, and operator drill-downs.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "EPIC-14",
+    "title": "Establish quality and release discipline",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Engineering",
+    "summary": "Add minimum validation, smoke checks, release checklist, and rollback expectations.",
+    "notes": "Still largely open. The repo currently lacks a meaningful automated test and release discipline.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md"
+    ]
+  },
+  {
+    "id": "EPIC-15",
+    "title": "Establish identity and workspace separation",
+    "status": "Done",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Identity",
+    "summary": "Add real user login, workspace membership, role boundaries, and platform admin separation.",
+    "notes": "Moved to In Progress on 2026-04-08. Firebase-backed session resolution, workspace summaries, access requests, approval flow, bootstrap workspace seeding, and active workspace switching are now live foundations.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md"
+    ]
+  },
+  {
+    "id": "EPIC-16",
+    "title": "Establish entitlements and monetization",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Product",
+    "stream": "Monetization",
+    "summary": "Add plan, entitlement, billing, and upgrade foundations without mutating Vault source truth.",
+    "notes": "In Progress as of 2026-04-10. Tier-aware signup, beta-only gating, entitlement scaffolding, reserved paid source/workspace provisioning, and approval-time SUNO source claiming are live. Upgrade, downgrade, and beta migration lifecycle work remains open.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md"
+    ]
+  },
+  {
+    "id": "EPIC-17",
+    "title": "Build platform admin control center",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Ops",
+    "stream": "Admin",
+    "summary": "Create the master admin surface for workspace oversight, support actions, usage visibility, and cost control.",
+    "notes": "Moved to In Progress on 2026-04-08. A first live Control Center shell exists with auth posture, queue pulse, export freshness, and beta signup approval actions.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "EPIC-18",
+    "title": "Prevent export, contract, and release regressions",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Add contract validation, runtime health signaling, and release-proof checks so the Vault cannot silently regress when exports, deploys, or runtime config drift.",
+    "notes": "Opened on 2026-04-08 as a dedicated reliability stream instead of folding this work into monitoring or general release discipline. The anchor incident is the live catalog.csv / lyrics regression where source truth, pipeline health, and viewer deploy all looked healthy while the product degraded because the export contract drifted. This epic owns the prevention stack: export contract validation, runtime visibility, deployment proof, fallback behavior, incident documentation discipline, and quota-safe YouTube bridge operation.",
+    "sources": [
+      "../codex/AEGIS_BOARD_UPDATE_2026-04-08.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md",
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-011",
+    "title": "Fix YouTube caption OAuth scopes and refresh token",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Backend",
+    "stream": "Bridge",
+    "summary": "Reauthorize production YouTube OAuth so caption insertion succeeds after upload.",
+    "notes": "Closed on 2026-04-08. Production refresh-token path now carries youtube.upload plus youtube.force-ssl, and uploader caption retry on existing uploaded videos writes back ytCaptionsStatus=done.",
+    "sources": [
+      "../codex/AEGIS_RUNTIME_VALIDATION_2026-04-07.md",
+      "../codex/AEGIS-011_YT_CAPTION_OAUTH_SCOPE_FIX.md",
+      "../codex/RUNBOOK_VAULT_TO_YT_OAUTH_FIX_2026-03-22.md"
+    ]
+  },
+  {
+    "id": "AEGIS-AUTH-001",
+    "title": "Add Firebase Authentication with Identity Platform backbone",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Identity",
+    "summary": "Introduce real login with Google sign-in and email magic link using Firebase Auth and Identity Platform.",
+    "notes": "Moved to In Progress on 2026-04-08. Viewer runtime now initializes Firebase Admin with ADC, resolves bearer-token sessions, provisions users/{uid} records, and the client now supports Google sign-in plus email magic link with legacy-mode fallback still enabled.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
+      "../codex/AEGIS_AUTH_WORKSPACE_IMPLEMENTATION_BRIEF_2026-04-07.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-AUTH-002",
+    "title": "Add workspace, membership, and role data model",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Identity",
+    "summary": "Define users, workspaces, memberships, and role boundaries including platform_admin separation.",
+    "notes": "Moved to In Progress on 2026-04-08. Shared types, workspace endpoints, workspace creation flow, accessRequests, tier-aware signup intake, approval and denial actions, and Firestore membership/rule scaffolding are now in place without mutating the Vault source-of-truth content model.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
+      "../codex/AEGIS_AUTH_WORKSPACE_IMPLEMENTATION_BRIEF_2026-04-07.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-AUTH-003",
+    "title": "Add backend authorization boundary and Firestore rules",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform",
+    "stream": "Identity",
+    "summary": "Enforce workspace-scoped access and explicit platform-admin powers in backend and Firestore rules.",
+    "notes": "Runtime-safe scaffolding began on 2026-04-08 with session resolution helpers, admin overview endpoints, and additive Firestore rule helpers. A first safe enforcement pass now gates YouTube publish actions, queue inspection, queue normalization, and upload triggering off plan-derived entitlements while leaving core Vault browsing untouched. Approved bootstrap identities now auto-seed into real workspaces and users can switch active workspaces from the auth controls.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
+      "../codex/AEGIS_AUTH_WORKSPACE_IMPLEMENTATION_BRIEF_2026-04-07.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-BIZ-001",
+    "title": "Define plan and entitlement schema",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Product + Platform",
+    "stream": "Monetization",
+    "summary": "Define plan bundles, entitlements, and admin override mechanics for feature gating.",
+    "notes": "Moved to In Progress on 2026-04-08. The first tier-aware signup intake, approval planId scaffolding, pricing placeholders, limit shells, and entitlement-family catalog now exist for beta, free, and early paid lanes. A first safe entitlement pass is now live for publish and queue controls; billing and broader paid gating are still pending.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md"
+    ]
+  },
+  {
+    "id": "AEGIS-ADMIN-001",
+    "title": "Build platform admin dashboard shell",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Ops",
+    "stream": "Admin",
+    "summary": "Create the first real admin control-center shell for workspace, billing, queue, and health oversight.",
+    "notes": "Moved to In Progress on 2026-04-08. A first visible Control Center shell now exists in the viewer with auth posture, workspace focus, queue pulse, export freshness, and tier-aware signup request approval and denial backed by /api/admin/overview.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-COST-001",
+    "title": "Define cost model per workspace",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Finance",
+    "stream": "Monetization",
+    "summary": "Create a workspace-level model for storage, runtime, and billing cost estimation.",
+    "notes": "This enables tier pricing to be refined against observed product economics instead of rough guesses.",
+    "sources": [
+      "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
+      "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md"
+    ]
+  },
+  {
+    "id": "AEGIS-AUTH-004",
+    "title": "Implement beta signup and approval flow",
+    "status": "Done",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Product",
+    "stream": "Identity",
+    "summary": "Add public signup intake, admin approval, and bootstrap-approved access flow for beta testers.",
+    "notes": "Completed on 2026-04-08. /signup, /api/signup/catalog, signed-in access requests, admin approval and denial actions, and bootstrap approval for blahnikdigitaldesigns@gmail.com plus aeonimusai@gmail.com are live.",
+    "sources": [
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-BIZ-002",
+    "title": "Enforce first safe plan entitlements",
+    "status": "Done",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Product",
+    "stream": "Monetization",
+    "summary": "Gate publish and queue actions by workspace entitlements without restricting Vault source-of-truth browsing.",
+    "notes": "Completed on 2026-04-08. Session-derived entitlements now gate queue-for-youtube, trigger-upload-job, queue inspection, queue normalize, and queue status, and the Vault UI disables gated distribution controls with a clear reason.",
+    "sources": [
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-012",
+    "title": "Harden catalog contract fallback and repair regressed export",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Stabilization",
+    "summary": "Protect the Vault against malformed catalog exports and restore the lyrics-era export contract when GCS drifts.",
+    "notes": "Opened on 2026-04-08 after the live Vault stopped showing lyrics. Resolved on 2026-04-08 by fixing the Cloud Run fallback path to use the baked dist/catalog.csv snapshot, redeploying suno-viewer, and republishing the repaired latest_catalog_wide.csv plus metadata to GCS. Control Center now reports both GCS and fallback healthy, and the live catalog contract again includes the lyrics/styles-era fields.",
+    "sources": [
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-013",
+    "title": "Validate export contract before publish and before serve",
+    "status": "Ready",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Define required catalog.csv columns and fail both export and serving paths when required fields disappear unexpectedly.",
+    "notes": "This is the first active prevention ticket under EPIC-18. It should make catalog contract drift explicit instead of silent by validating required columns in the export producer path and keeping the viewer-side schema guard as a second consumer-side gate.",
+    "sources": [
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-014",
+    "title": "Expose export health and fallback state in the Control Center",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform + Ops",
+    "stream": "Reliability",
+    "summary": "Show whether the Vault is serving from GCS or fallback, required-column health, missing fields, and export freshness in the Control Center.",
+    "notes": "Moved to In Progress on 2026-04-08. /api/admin/overview now returns catalog health inspection data and the Control Center renders serving source, GCS vs fallback health, and missing required columns so contract drift is visible before it becomes a user-reported Vault regression.",
+    "sources": [
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-015",
+    "title": "Add post-deploy smoke validation for Vault runtime integrity",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Define and run minimum live checks after deploy so the Vault is not treated as healthy until catalog, lyrics, styles, auth, and publish gating still work.",
+    "notes": "This ticket closes the gap between deploy success and product reality by requiring a small set of live runtime checks after releases that touch viewer, export, auth, or queue-adjacent surfaces.",
+    "sources": [
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-016",
+    "title": "Split daily health reporting into subsystem health",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Ops",
+    "stream": "Reliability",
+    "summary": "Separate harvest, export contract, viewer, queue, caption, and auth/admin health so one green pipeline email does not mask a degraded product surface.",
+    "notes": "The goal is to stop treating a single pipeline-healthy signal as sufficient when the live Vault feed or admin surfaces can still be degraded.",
+    "sources": [
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-017",
+    "title": "Standardize incident and postmortem capture for regressions",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "S",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Create one repeatable regression incident template covering symptom, impact, trigger, escape reason, immediate fix, and prevention follow-up.",
+    "notes": "This keeps future regressions from dissolving into scattered notes by forcing a single operational memory format with linked fixes and prevention tickets.",
+    "sources": [
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "AEGIS-018",
+    "title": "Enforce single active Vault player",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "S",
+    "owner": "Frontend",
+    "stream": "Vault UX",
+    "summary": "Ensure starting playback on one song stops any other active Vault player so overlapping audio cannot happen.",
+    "notes": "Current Vault cards can play multiple songs at the same time. Expected behavior is one active player globally: playing a new song should stop the currently playing song and transfer active playback state.",
+    "sources": [
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md"
+    ]
+  },
+  {
+    "id": "EPIC-19",
+    "title": "Migrate product naming and domain system to Sundrop",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform + Product",
+    "stream": "Platform Identity",
+    "summary": "Replace legacy Aeonimus product-facing branding with the canonical Sundrop naming system and prepare the code, auth, and routing layers for a safe split between sundrop.music and sundrop.cloud.",
+    "notes": "In Progress as of 2026-04-10. Naming policy, ticket stack, Sundrop constants, public-shell rebrand, and compatibility redirects are live. Remaining work is hardcoded link cleanup, dual-domain auth prep, and eventual domain cutover.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-019",
+    "title": "Inventory and classify legacy Aeonimus references",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Platform Identity",
+    "summary": "Inventory remaining Aeonimus references and classify each as product-facing, domain/config, infrastructure/internal, or historical documentation.",
+    "notes": "Completed on 2026-04-09. A first-pass Sundrop reference inventory now classifies remaining Aeonimus references into product-facing, domain/config, infrastructure/internal, and historical documentation so future renames can be deliberate instead of a global replace.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_REFERENCE_INVENTORY_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-020",
+    "title": "Centralize Sundrop product and domain constants",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Web App",
+    "stream": "Platform Identity",
+    "summary": "Define canonical product and domain constants for Sundrop Music, Sundrop Cloud, and Sundrop Vault and remove scattered hardcoded naming literals.",
+    "notes": "Completed on 2026-04-09. Shared branding and domain constants now live in suno-viewer via branding.config.json and src/lib/branding.ts, with app shell, signup, Vault, audio keys, and server naming wired to the shared source of truth.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_REFERENCE_INVENTORY_2026-04-09.md",
+      "../../suno-viewer/branding.config.json",
+      "../../suno-viewer/src/lib/branding.ts"
+    ]
+  },
+  {
+    "id": "AEGIS-021",
+    "title": "Rename product-facing UX to Sundrop branding",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Web App + Product",
+    "stream": "Platform Identity",
+    "summary": "Update live UI surfaces to use Sundrop Vault, Sundrop Cloud, and Sundrop Music instead of Aeonimus branding.",
+    "notes": "Moved to In Progress on 2026-04-09. Homepage, signup, Vault titles, and Control Center are now aligned to Sundrop branding, and the legacy /vanessa surface has been reduced to a compatibility redirect. Remaining work is to finish product-facing copy cleanup across the remaining live UX.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-022",
+    "title": "Audit and replace hardcoded legacy domain links",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Platform Identity",
+    "summary": "Replace hardcoded legacy domain links and origins with canonical domain-aware configuration before dual-domain rollout.",
+    "notes": "Moved to In Progress on 2026-04-09. Canonical domain constants and URL helpers now exist, and the legacy /vanessa route has been converted into a compatibility redirect. Remaining work is to finish auditing generated links, deep links, and integration-facing public URLs before dual-domain rollout.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-023",
+    "title": "Prepare auth and callback integrations for dual-domain rollout",
+    "status": "Backlog",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform + Identity",
+    "stream": "Platform Identity",
+    "summary": "Make auth, OAuth, redirect, and magic-link systems ready for the split between sundrop.music and sundrop.cloud.",
+    "notes": "This ticket should cover Firebase authorized domains, OAuth callbacks, magic-link targets, redirect assumptions, and other domain-dependent auth integrations before live cutover.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-024",
+    "title": "Stand up and validate Sundrop dual-domain routing",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Ops",
+    "stream": "Platform Identity",
+    "summary": "Bring up and validate sundrop.music and sundrop.cloud in parallel before changing canonical product-facing domains.",
+    "notes": "Validation should prove harvest/source flows on sundrop.music and Vault/publishing/auth/admin flows on sundrop.cloud before cutover.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-025",
+    "title": "Cut over canonical domains and add legacy redirects",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Ops",
+    "stream": "Platform Identity",
+    "summary": "Switch canonical product-facing domains to Sundrop and preserve legacy domain access through redirects during the transition window.",
+    "notes": "This should only happen after dual-domain validation is clean and should include close monitoring of auth, export, queue, email, and publishing behavior.",
+    "sources": [
+      "../codex/AEGIS_SUNDROP_NAMING_AND_DOMAIN_POLICY_2026-04-09.md",
+      "../codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md"
+    ]
+  },
+  {
+    "id": "AEGIS-026",
+    "title": "Add YouTube API quota guardrails and quota-safe call strategy",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Backend + Ops",
+    "stream": "Reliability",
+    "summary": "Prevent quota traps by budgeting YouTube API usage, preferring quota-cheap read paths, consolidating writes, and exposing quota risk before bulk publish or metadata operations.",
+    "notes": "Opened on 2026-04-14 from standup planning. This ticket should document the real quota-cost hotspots, replace avoidable search.list usage with cheaper playlist/list patterns where possible, batch metadata writes into single update calls, add retry/backoff rules that do not accidentally multiply expensive requests, and surface enough quota context that operators can plan uploads and bulk edits without guessing.",
+    "sources": [
+      "../codex/AEGIS_YOUTUBE_API_QUOTA_GUARDRAILS_2026-04-14.md",
+      "../codex/AEGIS_YOUTUBE_PUBLISH_MAPPING.md",
+      "../../suno-viewer/server.js",
+      "../../yt-ingest"
+    ]
+  },
+  {
+    "id": "AEGIS-027",
+    "title": "Plan post-beta Vault serving transition away from CSV-primary",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Web App",
+    "stream": "Reliability",
+    "summary": "Keep CSV as a beta-era export/fallback artifact, but define the transition to an authenticated API-backed Vault read model so stale snapshots stop being a primary product risk.",
+    "notes": "Opened on 2026-04-14. The current CSV model is still useful during beta because it keeps troubleshooting relatively simple, but it is also a recurring break point for freshness, fallback precedence, and access-model drift. This ticket should define a post-beta transition where CSV remains an export/fallback layer while live Vault reads move to an auth-aware typed API or server-side read model.",
+    "sources": [
+      "../codex/AEGIS_VAULT_STABILITY_TOOLBOX_AND_CSV_TRANSITION_2026-04-14.md",
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-028",
+    "title": "Add Vault diagnostic toolbox with operator-run checks and one-click common fixes",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Web App + Ops",
+    "stream": "Reliability",
+    "summary": "Add a lightweight operator toolbox near Queue Inspector that can run Vault health checks, show a concise report, and trigger safe first-line fixes for the most common catalog and media failures.",
+    "notes": "Opened on 2026-04-14. This is the near-term stabilization move that should help during beta without bogging down product progress. The toolbox should check freshness, serving source, export contract health, media/lyrics availability, and queue/publish readiness, then offer a small set of clearly labeled fix actions such as refresh export source, republish latest catalog artifact, or rebuild fallback snapshot.",
+    "sources": [
+      "../codex/AEGIS_VAULT_STABILITY_TOOLBOX_AND_CSV_TRANSITION_2026-04-14.md",
+      "../codex/AEGIS_AUTH_RUNTIME_FOUNDATION_2026-04-08.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-029",
+    "title": "Harden Vault auth storage and move privileged sessions toward HttpOnly cookies",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Security",
+    "stream": "Identity",
+    "summary": "Keep the beta-friendly Firebase SPA flow working, but define and implement the safer next step where operator and other privileged sessions stop depending on browser-readable local auth state.",
+    "notes": "Opened on 2026-04-14 after reviewing Firebase auth state in browser storage during Vault debugging. This should not block beta momentum, but it should become the main hardening lane for admin/operator access. The work should audit all current localStorage/sessionStorage auth usage, introduce a server-issued HttpOnly session-cookie path for privileged surfaces, and leave only low-risk UI state in browser storage.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SECURITY_AND_PERFORMANCE_STACK_2026-04-14.md",
+      "../codex/AEGIS_MASTER_SOURCE_OF_TRUTH.md",
+      "../../suno-viewer/src/lib/firebaseAuth.tsx",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-030",
+    "title": "Eliminate protected media URL leakage and repeated 401 thumb noise",
+    "status": "Done",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Web App + Platform",
+    "stream": "Reliability",
+    "summary": "Stop publishing raw protected /api/song-media URLs into the Vault DOM where the browser can speculative-fetch them without auth, generating noisy 401s and avoidable protected-media exposure patterns.",
+    "notes": "Opened on 2026-04-14 after live Vault debugging showed authenticated pages rendering correctly while the console filled with unauthorized thumb requests. Completed on 2026-04-14 by routing protected thumbnail/open-artwork links through the authenticated blob/object-URL path instead of exposing raw /api/song-media URLs in the DOM, which cleared the repeated thumb 401 console flood while preserving protected media delivery.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SECURITY_AND_PERFORMANCE_STACK_2026-04-14.md",
+      "../codex/AEGIS_Edge_Case_Handling_Framework.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../suno-viewer/src/components/AudioPlayer.tsx",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-031",
+    "title": "Reduce Vault startup session latency and critical-request chaining",
+    "status": "In Progress",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Web App + Platform",
+    "stream": "Performance",
+    "summary": "Shorten the initial /vault startup chain by reducing duplicate session work, improving session endpoint latency, and trimming avoidable render-blocking and startup-layout cost without destabilizing beta debugging.",
+    "notes": "Opened on 2026-04-14 from live DevTools traces during Vault crash and recovery work. The page is currently usable, but startup still pays heavily for api/auth/session, duplicate auth/session resolution, and some first-render layout work. Moved to In Progress on 2026-04-14 after the auth bootstrap was tightened to wait for Firebase token resolution before loading /api/auth/session, a low-risk preconnect hint was added for identitytoolkit.googleapis.com, the first catalog fetch was switched to reuse the already-resolved auth token, the Vault catalog load effect was narrowed to real browse-access signals instead of the whole session object, protected auth-control mutations were switched to reuse the resolved token, stale startup session/catalog requests were made abortable, the server-side metadata access token used by the session path was cached in-process until near expiry, and session timing instrumentation was added for future authenticated trace analysis. A fresh unauthenticated browser trace now shows a single /api/auth/session request on startup. Quick public-route verification did not surface the new timing headers or opt-in debug payload yet, so the next pass should verify how those values behave through the full hosting path before relying on them. Remaining work should verify the authenticated trace path and then profile the next safe startup/layout reductions.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SECURITY_AND_PERFORMANCE_STACK_2026-04-14.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../suno-viewer/src/lib/firebaseAuth.tsx",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-D001",
+    "title": "Define downloader workspace and filter model",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Product",
+    "stream": "Downloader",
+    "summary": "Introduce downloader-first source groups and include/exclude filter logic.",
+    "notes": "Planned track only. No implementation started.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/SUNO_Downloader_Competitive_Capability_Gap_Analysis.md"
+    ]
+  },
+  {
+    "id": "AEGIS-D002",
+    "title": "Define downloader packaging and export options",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Engineering",
+    "stream": "Downloader",
+    "summary": "Ship the first local-catalog export flow with manifest CSV packaging, asset bundling, and automatic multi-zip sharding for larger catalogs.",
+    "notes": "Moved to In Progress on 2026-04-15. A first working Tier 1 local export path now exists in suno-viewer: authenticated users with `catalog.export.local` can prepare a local catalog package, download a manifest CSV, and fetch one or more ZIP parts built from workspace-scoped audio, lyrics, and image assets. Sharding now targets a practical max part size instead of one giant archive so larger catalogs can split cleanly across multiple downloads. Remaining work should harden long-running export durability, refine tier gating, and add operator/customer-friendly export history and recovery UX.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
+      "../codex/SUNO_Downloader_Competitive_Capability_Gap_Analysis.md"
+    ]
+  },
+  {
+    "id": "AEGIS-D003",
+    "title": "Define downloader queue review UX and data model",
+    "status": "Backlog",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Design",
+    "stream": "Downloader",
+    "summary": "Create a review-and-edit queue step before download execution.",
+    "notes": "Planned track only. No implementation started.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md"
+    ]
+  },
+  {
+    "id": "AEGIS-D004",
+    "title": "Define metadata embedding and sidecar export scope",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Product",
+    "stream": "Downloader",
+    "summary": "Decide lyrics embedding, cover embedding, and JSON/TXT sidecars.",
+    "notes": "Planned track only. No implementation started.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md"
+    ]
+  },
+  {
+    "id": "AEGIS-D005",
+    "title": "Define downloader execution controls and history model",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Product",
+    "stream": "Downloader",
+    "summary": "Define scan-to-download flow, strategy profiles, history behavior, and completion feedback.",
+    "notes": "Planned track only. No implementation started.",
+    "sources": [
+      "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md"
+    ]
+  },
+  {
+    "id": "AEGIS-BIZ-003",
+    "title": "Tie SUNO source ownership to workspace and plan lifecycle",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Product",
+    "stream": "Monetization",
+    "summary": "Make SUNO source handles explicit workspace-owned assets so paid tiers, harvest, and approvals all point at the same ownership model.",
+    "notes": "Updated on 2026-04-10. Reserved studio-tier workspaces and source records now exist for unshakableechos2341 and gravitystruth, the viewer approval path can now claim SUNO handles into workspace-owned source records, and the live harvest job is running through catalog_sync_firestore_multi.py against the Firestore source registry.",
+    "sources": [
+      "../codex/AEGIS_SOURCE_OWNERSHIP_AND_TIER_LIFECYCLE_PLAN_2026-04-10.md",
+      "../../yt-ingest/catalog_sync_firestore_multi.py",
+      "../../yt-ingest/provision_paid_suno_sources.py",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-BIZ-004",
+    "title": "Define upgrade, downgrade, and beta migration lifecycle",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Product",
+    "stream": "Monetization",
+    "summary": "Define the frontend and backend lifecycle for beta expiry, upgrade to paid tiers, downgrade guardrails, and workspace plan transitions.",
+    "notes": "Opened on 2026-04-10. The current system already stores beta expiry and migration target fields, but still needs explicit upgrade and downgrade flows, over-limit checks, lifecycle transitions, and plan history rules.",
+    "sources": [
+      "../codex/AEGIS_SOURCE_OWNERSHIP_AND_TIER_LIFECYCLE_PLAN_2026-04-10.md",
+      "../../suno-viewer/server.js",
+      "../../suno-viewer/src/lib/signupCatalog.ts"
+    ]
+  },
+  {
+    "id": "AEGIS-BIZ-005",
+    "title": "Claim reserved paid SUNO sources into approved identities",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Ops",
+    "stream": "Monetization",
+    "summary": "Allow high-touch paid customer handles to be pre-provisioned, then claimed into the correct signed-in workspace and membership without losing harvest continuity.",
+    "notes": "Opened on 2026-04-10 after reserved studio-tier sources were seeded for unshakableechos2341 and gravitystruth. The next step is an admin/operator claim flow that attaches the real customer identity to the reserved workspace and source cleanly.",
+    "sources": [
+      "../codex/AEGIS_SOURCE_OWNERSHIP_AND_TIER_LIFECYCLE_PLAN_2026-04-10.md",
+      "../../suno-viewer/server.js",
+      "../../yt-ingest/provision_paid_suno_sources.py"
+    ]
+  },
+  {
+    "id": "AEGIS-BETA-001",
+    "title": "Operationalize beta request review and lifecycle actions",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Platform + Ops",
+    "stream": "Identity",
+    "summary": "Make beta review practical with pending-only review, expiry handling, and clear approval, denial, and migration actions for operators.",
+    "notes": "Opened on 2026-04-10. The beta intake is live, but operators still need faster pending review, expiry sweeps, and migration actions to move approved beta users into paid workspace plans at the end of beta.",
+    "sources": [
+      "../codex/AEGIS_SOURCE_OWNERSHIP_AND_TIER_LIFECYCLE_PLAN_2026-04-10.md",
+      "../../suno-viewer/server.js",
+      "../../suno-viewer/src/components/AdminControlCenter.tsx"
+    ]
+  },
+  {
+    "id": "EPIC-20",
+    "title": "Improve Vault retrieval and search",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Product + Web App",
+    "stream": "Vault UX",
+    "summary": "Turn Vault search into a real retrieval surface with richer matching, structured filters, saved views, and search-to-action workflows.",
+    "notes": "Opened on 2026-04-10. The current Vault has a useful first-pass search box, but no dedicated retrieval/search lane exists on the board yet. This epic owns discoverability, narrowing, saved retrieval views, and workflow-aware search for Vault, publishing, and operator use. On 2026-04-12 the first sovereign shell and condensed catalog-mode groundwork landed on /vault, moving this epic into active implementation.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
+    ]
+  },
+  {
+    "id": "AEGIS-SEARCH-001",
+    "title": "Expand core Vault search across title, handle, tags, styles, and lyrics",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Web App",
+    "stream": "Vault UX",
+    "summary": "Make the primary Vault search box match title, account handle, tags, styles, and lyrics text with better empty-state guidance and result visibility.",
+    "notes": "This is the first search ticket under EPIC-20. It should widen the current search from title-first matching into a real retrieval tool without requiring users to understand the catalog schema first.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-SEARCH-002",
+    "title": "Add structured Vault filters and active-filter chips",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Web App + Product",
+    "stream": "Vault UX",
+    "summary": "Add structured filters for account, publish state, removed status, lyrics/artifact availability, and style/tag narrowing without resetting the main search term.",
+    "notes": "This turns the Vault from a single search box into a workable retrieval surface. Active filters should remain visible, removable, and combinable so large catalogs can be narrowed deliberately. On 2026-04-12 the Vault shell split the search row from the control row and added the first catalog-mode controls, so this ticket now owns tightening those controls into a clearer structured retrieval band.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-SEARCH-003",
+    "title": "Add saved views for common Vault and operator retrieval workflows",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Product + Ops",
+    "stream": "Vault UX",
+    "summary": "Create reusable Vault views such as recent additions, removed from Suno, publish-ready, has lyrics, and metadata-incomplete.",
+    "notes": "Saved views should reduce repeated manual filtering for creators and operators and make search part of the production workflow instead of just browsing.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
+    ]
+  },
+  {
+    "id": "AEGIS-SEARCH-004",
+    "title": "Improve Vault search relevance and match visibility",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Web App",
+    "stream": "Vault UX",
+    "summary": "Improve search ranking, exact-match prioritization, and matched-field visibility so users understand why results appear.",
+    "notes": "Later-phase search quality work should weight title matches over tags/styles/lyrics, support more intuitive ranking, and make the match reason visible in the result cards where practical.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
+    ]
+  },
+  {
+    "id": "AEGIS-SEARCH-005",
+    "title": "Support search-to-action workflows in the Vault",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "L",
+    "owner": "Web App + Product",
+    "stream": "Vault UX",
+    "summary": "Make publish, review, and queue actions preserve search/filter context so search becomes part of the operator workflow.",
+    "notes": "This ticket connects retrieval to action by keeping result context stable while selecting, queueing, publishing, or reviewing items from filtered Vault sets.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
+    ]
+  },
+  {
+    "id": "AEGIS-MOBILE-001",
+    "title": "Implement mobile Vault browse layout on the main /vault route",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Web App + Design",
+    "stream": "Vault UX",
+    "summary": "Translate the Vault into a true mobile-first browse surface with compact relic rows, status-forward hierarchy, bottom navigation, and creator-safe controls without introducing a separate mobile URL.",
+    "notes": "Opened on 2026-04-12 from the approved mobile Neural Assets reference. This ticket owns the responsive mobile version of the main Vault browse experience on the existing /vault route, including the compact list presentation, mobile header, account context, filter affordances, and lower-page machine status block.",
+    "sources": [
+      "../codex/AEGIS_VAULT_MOBILE_TICKET_STACK_2026-04-12.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-MOBILE-002",
+    "title": "Add Sovereign Catalog mobile view with dense list controls",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Web App + Design",
+    "stream": "Vault UX",
+    "summary": "Create the mobile version of the condensed Sovereign Catalog view with metadata-first rows, publish actions, pagination, and per-page item count controls.",
+    "notes": "Opened on 2026-04-12 alongside the desktop Sovereign Catalog concept. This ticket covers the mobile behavior for the condensed catalog list, including at least 50-item paging support, mobile-safe action density, and a route/query model that stays under the existing Vault surface instead of creating a duplicate app.",
+    "sources": [
+      "../codex/AEGIS_VAULT_MOBILE_TICKET_STACK_2026-04-12.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-MOBILE-003",
+    "title": "Implement mobile publish and release configuration flow",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Web App + Design",
+    "stream": "Vault UX",
+    "summary": "Turn publish into a mobile-first release configuration flow with selected-song context, title override, playlist targeting, description template controls, privacy selection, and clear approval-safe actions.",
+    "notes": "Opened on 2026-04-12 from the approved Release Configuration mobile reference. This ticket owns the handheld publish surface for Tier 3 users/operators, whether implemented as a full-screen route, sheet, or drawer, as long as it preserves the existing Vault source truth and only edits publish-layer fields.",
+    "sources": [
+      "../codex/AEGIS_VAULT_MOBILE_TICKET_STACK_2026-04-12.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-MOBILE-004",
+    "title": "Define shared mobile navigation and action patterns for Vault surfaces",
+    "status": "Backlog",
+    "priority": "P2",
+    "size": "M",
+    "owner": "Design + Product",
+    "stream": "Vault UX",
+    "summary": "Standardize the mobile header, bottom navigation, menu behavior, and action placement across Vault browse, Sovereign Catalog, and publish so the mobile experience feels like one coherent product.",
+    "notes": "Opened on 2026-04-12 to keep mobile Vault work coherent instead of page-by-page improvisation. This ticket should define which controls are global, which are admin-only, and how browse, catalog, and publish states share one recognizable mobile shell.",
+    "sources": [
+      "../codex/AEGIS_VAULT_MOBILE_TICKET_STACK_2026-04-12.md"
+    ]
+  },
+  {
+    "id": "EPIC-21",
+    "title": "Track edge cases and production anomalies",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "L",
+    "owner": "Platform + Product",
+    "stream": "Reliability",
+    "summary": "Create a real home for malformed data, runtime oddities, import anomalies, and product edge cases that are too important to lose but too cross-cutting to force into a single lane.",
+    "notes": "Opened on 2026-04-10. This epic owns weird-but-real production behavior such as malformed Vault imports, stale media fallbacks, partial enrichments, and customer-visible anomalies that need tracking even when they span harvest, Vault UI, auth, and media handling.",
+    "sources": [
+      "../codex/AEGIS_Edge_Case_Handling_Framework.md"
+    ]
+  },
+  {
+    "id": "AEGIS-EDGE-001",
+    "title": "Define minimum viable song thresholds across import, Vault, and publish",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Web App + Platform",
+    "stream": "Reliability",
+    "summary": "Define how incomplete a song record can be before harvest should reject it, Vault should hide it, or publish should block it, and then apply those rules consistently.",
+    "notes": "Opened on 2026-04-10 from the malformed gravitystruth Vault row. This ticket is not about one song only; it owns the minimum viable song rule set. It should answer which fields are required for import acceptance, which are required for Vault display, which are required for playback, and which are required before a song can be queued or published.",
+    "sources": [
+      "../codex/AEGIS_Edge_Case_Handling_Framework.md",
+      "../codex/AEGIS_EDGE_CASE_TICKET_STACK_2026-04-10.md",
+      "../../suno-viewer/server.js",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../yt-ingest/catalog_sync_firestore_multi.py"
+    ]
+  },
+  {
+    "id": "AEGIS-EDGE-002",
+    "title": "Serve private song media without stale public fallback behavior",
+    "status": "Ready",
+    "priority": "P1",
+    "size": "M",
+    "owner": "Web App + Platform",
+    "stream": "Reliability",
+    "summary": "Define and implement the correct behavior when artwork or audio exists only as private gs:// media so the Vault uses guarded app delivery instead of stale or incorrect public CDN guesses.",
+    "notes": "Opened on 2026-04-10 from the gravitystruth artwork and audio mismatch. This ticket covers private-media proxying, fallback order, and when the Vault should show media-unavailable versus silently displaying the wrong artwork or audio.",
+    "sources": [
+      "../codex/AEGIS_Edge_Case_Handling_Framework.md",
+      "../codex/AEGIS_EDGE_CASE_TICKET_STACK_2026-04-10.md",
+      "../../suno-viewer/server.js",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../suno-viewer/src/components/AudioPlayer.tsx"
+    ]
+  }
+]

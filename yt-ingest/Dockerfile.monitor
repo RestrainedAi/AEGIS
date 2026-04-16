@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# No extra dependencies needed — pipeline_monitor.py uses only stdlib
+# (smtplib, urllib, json, base64, subprocess) plus google-auth for GCP token.
+RUN pip install --no-cache-dir google-auth==2.29.0
+
+COPY pipeline_monitor.py .
+
+ENV GCP_PROJECT=stable-framing-482501-t9
+ENV WORK_DIR=/app
+
+# Default: daily-digest mode. Override with --mode alert or --mode post-harvest
+# when calling from entrypoint.sh.
+ENTRYPOINT ["python3", "pipeline_monitor.py"]
+CMD ["--mode", "daily-digest"]

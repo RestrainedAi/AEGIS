@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isPlatformAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && (
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.is_active == true
+          || get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true
+        );
+    }
+
+    function isActiveWorkspaceMember(workspaceId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/memberships/$(request.auth.uid))
+        && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)/memberships/$(request.auth.uid)).data.status == "active"
+          || get(/databases/$(database)/documents/workspaces/$(workspaceId)/memberships/$(request.auth.uid)).data.status == "invited"
+        );
+    }
+
+    function isWorkspaceEditor(workspaceId) {
+      return isActiveWorkspaceMember(workspaceId)
+        && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)/memberships/$(request.auth.uid)).data.role in ["owner", "admin", "editor"]
+        );
+    }
+
+    function canReadOwnUserProfile(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Admin-only writes everywhere; public reads on sunoSongs
+    match /sunoSongs/{songId} {
+      allow read: if true;
+      allow write: if isPlatformAdmin();
+    }
+
+    match /admins/{userId} {
+      allow read, write: if isPlatformAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if canReadOwnUserProfile(uid) || isPlatformAdmin();
+      allow write: if canReadOwnUserProfile(uid) || isPlatformAdmin();
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read: if isActiveWorkspaceMember(workspaceId) || isPlatformAdmin();
+      allow create, update: if isPlatformAdmin();
+
+      match /memberships/{uid} {
+        allow read: if canReadOwnUserProfile(uid) || isPlatformAdmin() || isActiveWorkspaceMember(workspaceId);
+        allow write: if isPlatformAdmin();
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if isPlatformAdmin();
+    }
+  }
+}

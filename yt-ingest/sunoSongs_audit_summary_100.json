@@ -1,0 +1,40 @@
+{
+  "sampleSize": 100,
+  "counts": {
+    "docs": 100,
+    "top_video": 0,
+    "top_audio": 0,
+    "top_thumb": 0,
+    "media_video": 100,
+    "media_audio": 100,
+    "media_thumb": 100,
+    "sourcePlatform": 0,
+    "lastSeenAt": 0,
+    "indexedAt": 0,
+    "harvestedAt": 0,
+    "firstSeenAt": 0,
+    "isRemoved": 0,
+    "gcs_map": 100,
+    "rawMetadataRef": 0,
+    "rawPayloadRef": 0,
+    "artworkUrl": 0
+  },
+  "pct": {
+    "top_video": 0.0,
+    "top_audio": 0.0,
+    "top_thumb": 0.0,
+    "media_video": 100.0,
+    "media_audio": 100.0,
+    "media_thumb": 100.0,
+    "sourcePlatform": 0.0,
+    "lastSeenAt": 0.0,
+    "indexedAt": 0.0,
+    "harvestedAt": 0.0,
+    "firstSeenAt": 0.0,
+    "isRemoved": 0.0,
+    "gcs_map": 100.0,
+    "rawMetadataRef": 0.0,
+    "rawPayloadRef": 0.0,
+    "artworkUrl": 0.0
+  }
+}

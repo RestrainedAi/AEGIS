@@ -1,0 +1,36 @@
+STATUS (end of session - 2026-03-22)
+
+- Mission focus today was SUNO Vault recovery for Vanessa:
+  - restore usable titles in the live Vault
+  - verify playback
+  - verify Vault -> queue handoff for Carson
+
+- Metadata repair completed without new SUNO downloads:
+  - `repair_suno_metadata.py` was hardened for Windows auth and manifest-driven repair
+  - high-yield title repair batches patched 623 Firestore docs
+
+- Authoritative export rebuilt and republished:
+  - `python yt-ingest\\rebuild_catalog.py`
+  - output row count: 1845
+  - live site picked up the rebuilt export successfully
+
+- Live SUNO Vault status now:
+  - Vanessa rows: 1650
+  - Vanessa empty titles before: 1562
+  - Vanessa empty titles after: 202
+  - remaining active untitled Vanessa rows: 64
+  - remaining removed untitled Vanessa rows: 138
+
+- Live UI checks passed:
+  - `https://music.aeonimus.info/vanessa` loads
+  - playback works
+  - Publish button works from the live UI
+  - queue creation against `ytUploadQueue` works
+
+- Current blocker is downstream of the Vault:
+  - queued upload doc showed `HTTP Error 401: Unauthorized`
+  - this issue will not be resolved until tomorrow
+
+Next step tomorrow:
+- start from uploader auth / YouTube credential recovery, not Vault export recovery
+- once auth is fixed, re-test a song already queued from the live Vault UI

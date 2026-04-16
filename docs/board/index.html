@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AEGIS Delivery Board</title>
+  <style>
+    :root {
+      --bg: #f3efe8;
+      --ink: #1f1f1a;
+      --muted: #6d685d;
+      --card: #fffdf8;
+      --line: #d7cfc2;
+      --accent: #0f6c5c;
+      --accent-soft: #dff0ea;
+      --ready: #e4f2ff;
+      --backlog: #efe9dd;
+      --review: #fff1cf;
+      --done: #dff3d9;
+      --progress: #e6e0ff;
+      --blocked: #ffe1df;
+      --shadow: 0 10px 28px rgba(45, 39, 27, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15,108,92,0.08), transparent 32%),
+        linear-gradient(180deg, #f7f4ed 0%, var(--bg) 100%);
+    }
+
+    .shell {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.4fr 1fr;
+      margin-bottom: 20px;
+    }
+
+    .panel {
+      background: rgba(255, 253, 248, 0.78);
+      border: 1px solid rgba(215, 207, 194, 0.9);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-main {
+      padding: 24px 24px 18px;
+    }
+
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 40px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .hero-main p,
+    .hero-side p {
+      margin: 0;
+      color: #463f33;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .hero-side {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .stat {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.68);
+    }
+
+    .stat .label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .stat strong {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(260px, 1fr));
+      gap: 14px;
+      align-items: start;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .column {
+      min-height: 280px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(255,255,255,0.54);
+      box-shadow: var(--shadow);
+    }
+
+    .column[data-status="Backlog"] { background: linear-gradient(180deg, rgba(239,233,221,0.9), rgba(255,255,255,0.7)); }
+    .column[data-status="Ready"] { background: linear-gradient(180deg, rgba(228,242,255,0.95), rgba(255,255,255,0.72)); }
+    .column[data-status="In Progress"] { background: linear-gradient(180deg, rgba(230,224,255,0.95), rgba(255,255,255,0.72)); }
+    .column[data-status="Review"] { background: linear-gradient(180deg, rgba(255,241,207,0.95), rgba(255,255,255,0.72)); }
+    .column[data-status="Done"] { background: linear-gradient(180deg, rgba(223,243,217,0.95), rgba(255,255,255,0.72)); }
+    .column[data-status="Blocked"] { background: linear-gradient(180deg, rgba(255,225,223,0.95), rgba(255,255,255,0.72)); }
+
+    .column-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 4px 12px;
+      border-bottom: 1px solid rgba(131, 116, 92, 0.22);
+      margin-bottom: 12px;
+    }
+
+    .column-head h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .column-head span {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid rgba(97, 88, 70, 0.16);
+      border-radius: 16px;
+      background: var(--card);
+      padding: 14px;
+      box-shadow: 0 6px 18px rgba(54, 46, 32, 0.08);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+
+    .ticket-id {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .priority {
+      font-size: 11px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: var(--accent-soft);
+      color: #0f584b;
+      border: 1px solid rgba(15,108,92,0.16);
+      white-space: nowrap;
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .summary {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #463f33;
+      margin-bottom: 12px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .chip {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #f2ede3;
+      color: #564e40;
+      border: 1px solid rgba(84, 73, 53, 0.12);
+    }
+
+    .notes {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #5c5549;
+      margin-bottom: 12px;
+    }
+
+    .sources {
+      display: grid;
+      gap: 4px;
+    }
+
+    .sources a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .sources a:hover {
+      text-decoration: underline;
+    }
+
+    .empty {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 10px 6px;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 1200px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .stats {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      h1 { font-size: 30px; }
+      .controls { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .board { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="panel hero-main">
+        <div class="eyebrow">AEGIS Delivery System</div>
+        <h1>Implementation Board</h1>
+        <p>
+          A lightweight repo-native kanban board for the AEGIS program. This board is seeded from the
+          existing ticket and engineering-note set in <code>docs/codex</code> so we can track real work
+          without needing Jira on day one.
+        </p>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="panel hero-side">
+        <div>
+          <div class="eyebrow">How To Use</div>
+          <p>Filter by owner, stream, or priority, then open the linked source docs directly from each card.</p>
+        </div>
+        <div>
+          <div class="eyebrow">Status Meaning</div>
+          <p><strong>Review</strong> means there is evidence of started or completed work in the repo, but it still needs runtime or delivery validation before we call it done.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel controls">
+      <input id="search" type="search" placeholder="Search tickets, streams, notes, owners">
+      <select id="owner"></select>
+      <select id="stream"></select>
+      <select id="priority"></select>
+      <select id="status"></select>
+    </section>
+
+    <section class="board" id="board"></section>
+    <div class="footer">Board data source: <code>docs/board/tasks.json</code></div>
+  </div>
+
+  <script>
+    const statusOrder = ["Backlog", "Ready", "In Progress", "Review", "Done", "Blocked"];
+    const statusTone = {
+      "Backlog": "var(--backlog)",
+      "Ready": "var(--ready)",
+      "In Progress": "var(--progress)",
+      "Review": "var(--review)",
+      "Done": "var(--done)",
+      "Blocked": "var(--blocked)"
+    };
+
+    const els = {
+      board: document.getElementById("board"),
+      stats: document.getElementById("stats"),
+      search: document.getElementById("search"),
+      owner: document.getElementById("owner"),
+      stream: document.getElementById("stream"),
+      priority: document.getElementById("priority"),
+      status: document.getElementById("status")
+    };
+
+    let tasks = [];
+
+    function uniqueValues(key) {
+      return [...new Set(tasks.map((task) => task[key]).filter(Boolean))].sort();
+    }
+
+    function fillSelect(select, label, values) {
+      select.innerHTML = "";
+      const any = document.createElement("option");
+      any.value = "";
+      any.textContent = `All ${label}`;
+      select.appendChild(any);
+      values.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    }
+
+    function filteredTasks() {
+      const query = els.search.value.trim().toLowerCase();
+      return tasks.filter((task) => {
+        const matchesQuery = !query || [
+          task.id,
+          task.title,
+          task.owner,
+          task.priority,
+          task.stream,
+          task.summary,
+          task.notes
+        ].join(" ").toLowerCase().includes(query);
+
+        const matchesOwner = !els.owner.value || task.owner === els.owner.value;
+        const matchesStream = !els.stream.value || task.stream === els.stream.value;
+        const matchesPriority = !els.priority.value || task.priority === els.priority.value;
+        const matchesStatus = !els.status.value || task.status === els.status.value;
+
+        return matchesQuery && matchesOwner && matchesStream && matchesPriority && matchesStatus;
+      });
+    }
+
+    function renderStats(list) {
+      const statusCounts = statusOrder.reduce((acc, status) => {
+        acc[status] = list.filter((task) => task.status === status).length;
+        return acc;
+      }, {});
+
+      const cards = [
+        { label: "Visible Tickets", value: list.length },
+        { label: "In Review", value: statusCounts["Review"] },
+        { label: "Ready", value: statusCounts["Ready"] },
+        { label: "Backlog", value: statusCounts["Backlog"] }
+      ];
+
+      els.stats.innerHTML = "";
+      cards.forEach((card) => {
+        const div = document.createElement("div");
+        div.className = "stat";
+        div.innerHTML = `<span class="label">${card.label}</span><strong>${card.value}</strong>`;
+        els.stats.appendChild(div);
+      });
+    }
+
+    function renderBoard() {
+      const list = filteredTasks();
+      renderStats(list);
+      els.board.innerHTML = "";
+
+      statusOrder.forEach((status) => {
+        const column = document.createElement("section");
+        column.className = "column";
+        column.dataset.status = status;
+
+        const items = list.filter((task) => task.status === status);
+        const stack = items.map((task) => {
+          const sourceLinks = (task.sources || []).map((source) => {
+            const label = source.split("/").pop();
+            return `<a href="${source}">${label}</a>`;
+          }).join("");
+
+          return `
+            <article class="card">
+              <div class="card-top">
+                <div class="ticket-id">${task.id}</div>
+                <div class="priority">${task.priority}</div>
+              </div>
+              <h3>${task.title}</h3>
+              <div class="summary">${task.summary}</div>
+              <div class="meta">
+                <span class="chip">${task.owner}</span>
+                <span class="chip">${task.stream}</span>
+                <span class="chip">${task.size}</span>
+              </div>
+              <div class="notes">${task.notes}</div>
+              <div class="sources">${sourceLinks || ""}</div>
+            </article>
+          `;
+        }).join("");
+
+        column.innerHTML = `
+          <div class="column-head">
+            <h2>${status}</h2>
+            <span>${items.length}</span>
+          </div>
+          <div class="stack">${stack || `<div class="empty">No tickets in this column.</div>`}</div>
+        `;
+
+        els.board.appendChild(column);
+      });
+    }
+
+    fetch("./tasks.json")
+      .then((response) => response.json())
+      .then((data) => {
+        tasks = data;
+        fillSelect(els.owner, "Owners", uniqueValues("owner"));
+        fillSelect(els.stream, "Streams", uniqueValues("stream"));
+        fillSelect(els.priority, "Priorities", uniqueValues("priority"));
+        fillSelect(els.status, "Statuses", statusOrder);
+
+        [els.search, els.owner, els.stream, els.priority, els.status].forEach((el) => {
+          el.addEventListener("input", renderBoard);
+          el.addEventListener("change", renderBoard);
+        });
+
+        renderBoard();
+      })
+      .catch((error) => {
+        els.board.innerHTML = `<div class="empty">Failed to load board data: ${error.message}</div>`;
+      });
+  </script>
+</body>
+</html>

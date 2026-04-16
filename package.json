@@ -1,0 +1,17 @@
+{
+  "name": "suno-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@google-cloud/storage": "^7.19.0",
+    "express": "^4.19.2",
+    "googleapis": "^171.4.0",
+    "open": "^11.0.0"
+  }
+}

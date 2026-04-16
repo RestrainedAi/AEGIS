@@ -1,0 +1,21 @@
+SUNO Vault Recovery - Safe Stop (2026-03-22)
+
+State as of shutdown:
+- live `https://music.aeonimus.info/vanessa` is usable again
+- authoritative catalog export was rebuilt from Firestore and republished
+- Vanessa empty titles dropped from 1562 to 202
+- playback works in the live Vault
+- live Publish button writes queue docs to `ytUploadQueue`
+
+Known blocker left for tomorrow:
+- uploader-side `401 Unauthorized` on queued YouTube uploads
+- Vault boundary is working; downstream auth is not yet resolved
+
+Guardrails:
+- all media is already in Firestore and Cloud Storage
+- do NOT run SUNO downloads unless user explicitly approves
+- metadata-only backfill is allowed if needed
+
+Tomorrow start point:
+- begin with YouTube uploader auth / credential recovery
+- then re-test with a song already queued from the live Vault

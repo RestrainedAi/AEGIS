@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEONIMUS | AI Music Publishing Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0c0e10; color: #e2e2e5; }
+        .mono { font-family: 'Roboto Mono', monospace; }
+        .kinetic-gradient { background: linear-gradient(135deg, #adc6ff 0%, #4d8efe 100%); }
+        .glass-panel { background: rgba(18, 20, 22, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(173, 198, 255, 0.1); }
+        .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-[#adc6ff]/30">
+
+    <nav class="border-b border-white/5 bg-black/40 backdrop-blur-2xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl font-black tracking-tighter text-[#adc6ff] uppercase">&#10687; AEONIMUS</span>
+            </div>
+            <div class="flex items-center gap-8 text-[11px] font-bold uppercase tracking-widest text-white/40">
+                <a href="/privacy" class="hover:text-white transition-colors">Privacy Policy</a>
+                <a href="/terms" class="hover:text-white transition-colors">Terms of Service</a>
+                <a href="https://music.aeonimus.info" class="bg-[#adc6ff] text-[#001a41] px-5 py-2 rounded-sm font-black hover:opacity-90 transition-opacity shadow-lg shadow-blue-500/10">Open Vault</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-6xl mx-auto px-8 py-24 text-center space-y-20">
+        <header class="space-y-8">
+            <div class="pill">
+                <span class="text-[9px] font-black uppercase tracking-[0.4em] text-[#66dd8b]">&#10003; Authorized YouTube Publishing Pipeline</span>
+            </div>
+            <h1 class="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9]">
+                AI Music.<br/>
+                <span class="text-transparent bg-clip-text kinetic-gradient">Published.</span>
+            </h1>
+            <p class="max-w-2xl mx-auto text-lg text-white/50 font-medium leading-relaxed">
+                AEONIMUS is an authorized media publishing platform that manages, catalogs, and distributes
+                AI-generated music to YouTube channels owned and operated by AEONIMUS account holders.
+            </p>
+            <a href="https://music.aeonimus.info" class="inline-block bg-[#adc6ff] text-[#001a41] px-10 py-4 rounded-sm font-black text-sm uppercase tracking-widest hover:opacity-90 transition-opacity shadow-xl shadow-blue-500/20">
+                Browse the Vault &rarr;
+            </a>
+        </header>
+
+        <section class="text-left space-y-6">
+            <h2 class="text-xs font-black uppercase tracking-[0.4em] text-white/30 text-center">What AEONIMUS Does</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-panel p-8 rounded-2xl space-y-4">
+                    <div class="text-3xl text-[#66dd8b]">&#9836;</div>
+                    <h3 class="text-sm font-black uppercase tracking-widest">Catalog &amp; Archive</h3>
+                    <p class="text-xs text-white/40 leading-relaxed">
+                        AI-generated audio tracks are cataloged with full metadata — titles, creation dates,
+                        and asset URLs — and archived in Google Cloud Storage for durable, organized access.
+                    </p>
+                </div>
+                <div class="glass-panel p-8 rounded-2xl space-y-4">
+                    <div class="text-3xl text-[#adc6ff]">&#9654;</div>
+                    <h3 class="text-sm font-black uppercase tracking-widest">YouTube Publishing</h3>
+                    <p class="text-xs text-white/40 leading-relaxed">
+                        Using the YouTube Data API v3, AEONIMUS uploads media to authorized YouTube channels
+                        with proper titles, descriptions, and AI-content disclosures as required by YouTube policy.
+                    </p>
+                </div>
+                <div class="glass-panel p-8 rounded-2xl space-y-4 border-l-2 border-[#ffb2be]">
+                    <div class="text-3xl text-[#ffb2be]">&#9881;</div>
+                    <h3 class="text-sm font-black uppercase tracking-widest">Access Control</h3>
+                    <p class="text-xs text-white/40 leading-relaxed">
+                        OAuth 2.0 authorization is used exclusively to act on behalf of the channel owner.
+                        No user data is sold, shared, or used outside the declared publishing purpose.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="glass-panel rounded-2xl p-10 text-left space-y-4 border border-[#adc6ff]/20">
+            <h2 class="text-sm font-black uppercase tracking-widest text-[#adc6ff]">Google API Authorization Disclosure</h2>
+            <p class="text-sm text-white/60 leading-relaxed max-w-3xl">
+                AEONIMUS uses the <strong class="text-white">YouTube Data API v3</strong> to upload video content and manage video metadata
+                on behalf of the authenticated channel owner. Authorization is obtained via OAuth 2.0 and is limited
+                strictly to the scopes required for publishing to the owner's own YouTube channel.
+            </p>
+            <p class="text-sm text-white/60 leading-relaxed max-w-3xl">
+                AEONIMUS's use of information received from Google APIs adheres to the
+                <a href="https://developers.google.com/terms/api-services-user-data-policy" class="text-[#adc6ff] underline underline-offset-4 hover:opacity-80" target="_blank" rel="noopener">
+                    Google API Services User Data Policy
+                </a>,
+                including the Limited Use requirements.
+            </p>
+            <div class="flex gap-6 pt-2">
+                <a href="/privacy" class="text-xs font-black uppercase tracking-widest text-[#adc6ff] hover:opacity-70 transition-opacity">Privacy Policy &rarr;</a>
+                <a href="/terms" class="text-xs font-black uppercase tracking-widest text-white/40 hover:text-white transition-colors">Terms of Service &rarr;</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-white/5 bg-black py-16 px-8">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="text-center md:text-left">
+                <span class="text-sm font-black uppercase tracking-[0.5em] text-white">AEONIMUS</span>
+                <p class="text-[10px] mono text-white/20 mt-2">AI Music Publishing &mdash; <a href="mailto:contact@aeonimus.ai" class="hover:text-white/40 transition-colors">contact@aeonimus.ai</a></p>
+            </div>
+            <div class="flex gap-10 text-[10px] font-black uppercase tracking-widest text-white/30">
+                <a href="/privacy" class="hover:text-[#adc6ff] transition-colors">Privacy Policy</a>
+                <a href="/terms" class="hover:text-[#adc6ff] transition-colors">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

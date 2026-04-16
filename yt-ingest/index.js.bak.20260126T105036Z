@@ -1,0 +1,99 @@
+const express = require("express");
+const fetch = require("node-fetch");
+const { Storage } = require("@google-cloud/storage");
+
+const app = express();
+app.use(express.json());
+
+const storage = new Storage();
+const BUCKET = "aeonimus-yt-206866140882-prod";
+
+function extractPlaylistId(input) {
+  if (!input) return null;
+  const m = String(input).match(/[?&]list=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : String(input).trim();
+}
+
+async function ytListPlaylistItems({ apiKey, playlistId, pageToken }) {
+  const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+  url.searchParams.set("part", "snippet,contentDetails");
+  url.searchParams.set("maxResults", "50");
+  url.searchParams.set("playlistId", playlistId);
+  url.searchParams.set("key", apiKey);
+  if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+  const r = await fetch(url.toString());
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || `YouTube API error (${r.status})`);
+  return j;
+}
+
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.post("/ingest", async (req, res) => {
+  try {
+    const apiKey = process.env.YT_API_KEY;
+    if (!apiKey) return res.status(500).json({ ok: false, error: "Missing YT_API_KEY" });
+
+    const playlistInput = req.query.playlist || req.body?.playlist;
+    const playlistId = extractPlaylistId(playlistInput);
+    if (!playlistId) return res.status(400).json({ ok: false, error: "Missing playlist (id or url)" });
+
+    const runId = new Date().toISOString().replace(/[:.]/g, "-");
+    const prefix = `yt/runs/${playlistId}/${runId}`;
+    const runPath = `${prefix}/manifest/playlist_run.json`;
+    const manifestPath = `${prefix}/manifest/playlist_manifest.jsonl`;
+
+    let pageToken;
+    let count = 0;
+    const lines = [];
+
+    do {
+      const data = await ytListPlaylistItems({ apiKey, playlistId, pageToken });
+      pageToken = data.nextPageToken;
+
+      for (const item of (data.items || [])) {
+        const videoId = item?.contentDetails?.videoId;
+        if (!videoId) continue;
+
+        const record = {
+          playlistId,
+          playlistItemId: item.id,
+          position: item?.snippet?.position ?? null,
+          videoId,
+          videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          title: item?.snippet?.title ?? null,
+          description: item?.snippet?.description ?? null,
+          channelId: item?.snippet?.videoOwnerChannelId ?? item?.snippet?.channelId ?? null,
+          channelTitle: item?.snippet?.videoOwnerChannelTitle ?? item?.snippet?.channelTitle ?? null,
+          videoPublishedAt: item?.contentDetails?.videoPublishedAt ?? null,
+          thumbnails: item?.snippet?.thumbnails ?? null,
+          retrievedAt: new Date().toISOString(),
+          provenance: { source: "youtubeDataApiV3", method: "playlistItems.list", apiVersion: "v3" },
+          paths: {
+            gcsVideoJson: `gs://${BUCKET}/${prefix}/videos/${videoId}/video.json`,
+            gcsCaptionsVtt: `gs://${BUCKET}/${prefix}/videos/${videoId}/captions.vtt`,
+            gcsTranscriptTxt: `gs://${BUCKET}/${prefix}/videos/${videoId}/transcript.txt`
+          },
+          captions: { status: "PENDING" }
+        };
+
+        lines.push(JSON.stringify(record));
+        count++;
+      }
+    } while (pageToken);
+
+    await storage.bucket(BUCKET).file(runPath).save(JSON.stringify({
+      playlistId, runId, count, createdAt: new Date().toISOString(), status: "MANIFEST_WRITTEN"
+    }, null, 2), { contentType: "application/json" });
+
+    await storage.bucket(BUCKET).file(manifestPath).save(lines.join("\n"), { contentType: "application/x-ndjson" });
+
+    res.json({ ok: true, playlistId, count, runId, gcsPrefix: `gs://${BUCKET}/${prefix}/` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+const port = process.env.PORT || 8080;
+app.listen(port, () => console.log(`Listening on ${port}`));

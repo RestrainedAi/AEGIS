@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-jobs/pipeline-monitor:latest'
+      - '-f'
+      - 'Dockerfile.monitor'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-jobs/pipeline-monitor:latest'
+options:
+  diskSizeGb: 10
+timeout: '300s'

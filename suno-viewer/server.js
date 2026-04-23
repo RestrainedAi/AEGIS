@@ -11,6 +11,7 @@ const { parse: parseCsvSync } = require("csv-parse/sync");
 const { applicationDefault, getApps, initializeApp: initializeFirebaseApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const branding = require("./branding.config.json");
+const tierCatalogConfig = require("./shared/tierCatalog.json");
 
 const app = express();
 const storage = new Storage();
@@ -32,6 +33,10 @@ const QUEUE_COLLECTION = "ytUploadQueue";
 const SONG_COLLECTION = "sunoSongs";
 const ACCESS_REQUEST_COLLECTION = "accessRequests";
 const APP_NAME = branding.productNames.cloud;
+const CLOUD_ORIGIN = String(branding.domains?.cloudOrigin || "").trim();
+const MUSIC_ORIGIN = String(branding.domains?.musicOrigin || "").trim();
+const CLOUD_HOSTNAME = safeHostname(CLOUD_ORIGIN);
+const MUSIC_HOSTNAME = safeHostname(MUSIC_ORIGIN);
 const SUPPORT_EMAIL = "blahnikdigitaldesigns@gmail.com";
 const MAIL_CONFIG_SECRET = process.env.MAIL_CONFIG_SECRET || "pipeline-monitor-config";
 const AUTH_LEGACY_MODE = String(process.env.AUTH_LEGACY_MODE || "true").toLowerCase() !== "false";
@@ -47,29 +52,59 @@ const INITIAL_APPROVED_EMAILS = String(
   .split(",")
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
+const PUBLIC_SIGNUP_TIER_IDS = String(
+  process.env.PUBLIC_SIGNUP_TIER_IDS || "artist,creator,producer"
+)
+  .split(",")
+  .map((value) => String(value || "").trim().toLowerCase().replace(/[_\s]+/g, "-"))
+  .filter(Boolean);
 
 const SIGNUP_TIER_DEFAULTS = {
+  artist: {
+    requestKind: "beta",
+    planId: "artist",
+    role: "viewer",
+    workspaceMode: "new",
+  },
+  creator: {
+    requestKind: "paid",
+    planId: "creator-monthly",
+    role: "viewer",
+    workspaceMode: "new",
+  },
+  producer: {
+    requestKind: "paid",
+    planId: "producer-monthly",
+    role: "admin",
+    workspaceMode: "new",
+  },
+  executive: {
+    requestKind: "paid",
+    planId: "executive-monthly",
+    role: "admin",
+    workspaceMode: "new",
+  },
   beta: {
     requestKind: "beta",
-    planId: "beta",
+    planId: "artist",
     role: "viewer",
     workspaceMode: "new",
   },
   free: {
-    requestKind: "free",
-    planId: "free",
+    requestKind: "beta",
+    planId: "artist",
     role: "viewer",
     workspaceMode: "new",
   },
   creator_monthly: {
     requestKind: "paid",
     planId: "creator-monthly",
-    role: "editor",
+    role: "viewer",
     workspaceMode: "new",
   },
   studio_monthly: {
     requestKind: "paid",
-    planId: "studio-monthly",
+    planId: "producer-monthly",
     role: "admin",
     workspaceMode: "new",
   },
@@ -106,6 +141,15 @@ const REQUIRED_CATALOG_COLUMNS = [
   "lyricsStatus",
   "gcsLyricsTxt",
 ];
+
+function safeHostname(origin) {
+  if (!origin) return "";
+  try {
+    return new URL(origin).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
 
 function catalogHasRequiredColumns(csvText) {
   const headerLine = String(csvText || "").split(/\r?\n/, 1)[0] || "";
@@ -215,6 +259,44 @@ function byteLabel(bytes) {
   return `${scaled >= 10 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`;
 }
 
+function buildExportFileStem(row) {
+  const songKey = safeFilePart(row.songKey, crypto.randomBytes(4).toString("hex"));
+  return songKey || crypto.randomBytes(4).toString("hex");
+}
+
+function manifestFileNameForPart(partName, kind) {
+  const stem = safeFilePart(String(partName || "").replace(/\.zip$/i, ""), "catalog_part");
+  if (kind === "summary") {
+    return `${stem}.summary.json`;
+  }
+  return `${stem}.catalog.csv`;
+}
+
+function buildCatalogExportReadyEmail({ job, context, summary }) {
+  const workspaceName = context?.activeWorkspace?.name || summary?.workspaceName || job.workspaceId;
+  const body = `
+    <p style="margin:0 0 18px;">Your local catalog package is ready to download from the Vault downloads panel.</p>
+    ${notificationList([
+      { label: "Workspace", value: workspaceName },
+      { label: "Rows", value: Number(job.totalRows || 0).toLocaleString() },
+      { label: "Assets", value: Number(job.totalAssets || 0).toLocaleString() },
+      { label: "ZIP parts", value: Number(job.partCount || 0).toLocaleString() },
+      { label: "Package size", value: byteLabel(job.totalBytes || 0) },
+      { label: "Missing assets", value: Number(job.missingAssets || 0).toLocaleString() },
+      { label: "Expires", value: job.expiresAt || "" },
+    ])}
+    <p style="margin:18px 0 0;">
+      Open the Vault downloads panel here:
+      <a href="https://music.aeonimus.info/vault" style="color:#b7bbff;">https://music.aeonimus.info/vault</a>
+    </p>
+  `;
+  return notificationShell({
+    title: "Local catalog download ready",
+    intro: `${workspaceName} has finished packaging and is ready for download.`,
+    body,
+  });
+}
+
 function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid }) {
   const exportId = crypto.randomBytes(8).toString("hex");
   const jobDir = path.join(LOCAL_EXPORT_ROOT, exportId);
@@ -230,6 +312,11 @@ function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid }) {
     expiresAt: new Date(Date.now() + EXPORT_TTL_MS).toISOString(),
     jobDir,
     error: "",
+    phaseLabel: "Queued",
+    progressMessage: "Waiting to prepare this catalog package.",
+    stepCurrent: 0,
+    stepTotal: 4,
+    currentPart: 0,
     manifestPath: "",
     summaryPath: "",
     totalRows: 0,
@@ -241,6 +328,40 @@ function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid }) {
   };
   catalogExportJobs.set(exportId, job);
   return job;
+}
+
+function setCatalogExportProgress(job, updates = {}) {
+  if (!job) return;
+  Object.assign(job, updates);
+  job.updatedAt = new Date().toISOString();
+}
+
+function serializeCatalogExportJob(job) {
+  return {
+    ok: true,
+    exportId: job.exportId,
+    workspaceId: job.workspaceId,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    expiresAt: job.expiresAt,
+    phaseLabel: job.phaseLabel || "",
+    progressMessage: job.progressMessage || "",
+    stepCurrent: Number(job.stepCurrent || 0),
+    stepTotal: Number(job.stepTotal || 0),
+    currentPart: Number(job.currentPart || 0),
+    totalRows: job.totalRows || 0,
+    totalAssets: job.totalAssets || 0,
+    totalBytes: job.totalBytes || 0,
+    totalBytesLabel: byteLabel(job.totalBytes || 0),
+    missingAssets: job.missingAssets || 0,
+    partCount: job.partCount || 0,
+    parts: job.parts || [],
+    manifestUrl: job.manifestPath ? `/api/catalog-export/${job.exportId}/manifest` : "",
+    summaryUrl: job.summaryPath ? `/api/catalog-export/${job.exportId}/summary` : "",
+    summary: job.summary || null,
+    error: job.error || "",
+  };
 }
 
 function cleanupExpiredCatalogExports() {
@@ -474,8 +595,7 @@ async function buildExportRowsForWorkspace(rows) {
 
   for (const row of rows) {
     const songKey = safeFilePart(row.songKey, crypto.randomBytes(4).toString("hex"));
-    const titlePart = safeFilePart(row.title, songKey);
-    const baseName = `${songKey} ${titlePart}`.trim();
+    const fileStem = buildExportFileStem(row);
 
     const audioGs = row.gcs_latest_audio || row.gcs_mp3 || row.audio_url || "";
     const imageGs = row.gcs_latest_thumb || row.gcs_thumb || row.image_url || "";
@@ -488,7 +608,7 @@ async function buildExportRowsForWorkspace(rows) {
       title: row.title,
       kind: "audio",
       gsUrl: audioGs,
-      exportPath: `audio/${baseName}${extFromObjectName(audioGs, ".mp3")}`,
+      exportPath: `audio/${fileStem}${extFromObjectName(audioGs, ".mp3")}`,
       notes: "missing_audio",
     });
     const imageAsset = await resolveAssetDescriptor({
@@ -496,7 +616,7 @@ async function buildExportRowsForWorkspace(rows) {
       title: row.title,
       kind: "thumb",
       gsUrl: imageGs,
-      exportPath: `images/thumbs/${baseName}${extFromObjectName(imageGs, ".jpg")}`,
+      exportPath: `images/thumbs/${fileStem}${extFromObjectName(imageGs, ".jpg")}`,
       notes: "missing_image",
     });
     const lyricsTxtAsset = lyricsTxtGs
@@ -505,13 +625,13 @@ async function buildExportRowsForWorkspace(rows) {
           title: row.title,
           kind: "lyrics_txt",
           gsUrl: lyricsTxtGs,
-          exportPath: `lyrics/txt/${baseName}.txt`,
+          exportPath: `lyrics/txt/${fileStem}.txt`,
           notes: "missing_lyrics",
         })
       : inlineLyrics
         ? {
             kind: "lyrics_txt",
-            exportPath: `lyrics/txt/${baseName}.txt`,
+            exportPath: `lyrics/txt/${fileStem}.txt`,
             exists: true,
             estimatedBytes: Buffer.byteLength(inlineLyrics, "utf8"),
             inlineContent: inlineLyrics,
@@ -521,7 +641,7 @@ async function buildExportRowsForWorkspace(rows) {
           }
         : {
             kind: "lyrics_txt",
-            exportPath: `lyrics/txt/${baseName}.txt`,
+            exportPath: `lyrics/txt/${fileStem}.txt`,
             exists: false,
             estimatedBytes: 0,
             note: "missing_lyrics",
@@ -533,7 +653,7 @@ async function buildExportRowsForWorkspace(rows) {
       title: row.title,
       kind: "lyrics_vtt",
       gsUrl: lyricsVttGs,
-      exportPath: `lyrics/vtt/${baseName}.vtt`,
+      exportPath: `lyrics/vtt/${fileStem}.vtt`,
       notes: "missing_lyrics_vtt",
     });
 
@@ -554,6 +674,7 @@ async function buildExportRowsForWorkspace(rows) {
       estimatedBytes: availableAssets.reduce((sum, asset) => sum + Number(asset.estimatedBytes || 0), 0),
       manifest: {
         ...row,
+        exportFileStem: fileStem,
         audioPath: audioAsset.exists ? audioAsset.exportPath : "",
         thumbPath: imageAsset.exists ? imageAsset.exportPath : "",
         imagePath: imageAsset.exists ? imageAsset.exportPath : "",
@@ -621,8 +742,17 @@ async function writeZipPart(part, manifestCsv, summaryJson, targetPath) {
   });
   archive.pipe(output);
 
-  archive.append(manifestCsv, { name: "manifest/catalog.csv" });
-  archive.append(summaryJson, { name: "manifest/summary.json" });
+  archive.append(manifestCsv, { name: `manifest/${manifestFileNameForPart(part.partName, "catalog")}` });
+  archive.append(summaryJson, { name: `manifest/${manifestFileNameForPart(part.partName, "summary")}` });
+  archive.append(
+    [
+      "Unzip each catalog part into the same parent folder.",
+      "Audio, image, and lyrics filenames are already unique and safe to merge.",
+      "Manifest files are named per-part so they do not overwrite each other.",
+      "",
+    ].join("\n"),
+    { name: "manifest/README.txt" }
+  );
 
   for (const row of part.rows) {
     for (const asset of row.assets) {
@@ -644,13 +774,35 @@ async function writeZipPart(part, manifestCsv, summaryJson, targetPath) {
 }
 
 async function runCatalogExportJob(job, context, accessToken) {
-  job.status = "preparing";
-  job.updatedAt = new Date().toISOString();
+  setCatalogExportProgress(job, {
+    status: "preparing",
+    phaseLabel: "Loading catalog",
+    progressMessage: "Reading the latest catalog snapshot for this workspace.",
+    stepCurrent: 1,
+    stepTotal: 4,
+    currentPart: 0,
+    error: "",
+  });
 
   const sourceDocs = await listWorkspaceSourceDocs(job.workspaceId, accessToken);
   const loaded = await loadCatalogCsv();
   const workspaceRows = buildWorkspaceCatalogRows(loaded.buffer.toString("utf8"), sourceDocs);
+  setCatalogExportProgress(job, {
+    phaseLabel: "Resolving assets",
+    progressMessage: `Found ${workspaceRows.length.toLocaleString()} catalog row${workspaceRows.length === 1 ? "" : "s"} for packaging.`,
+    stepCurrent: 2,
+  });
+  if (workspaceRows.length === 0) {
+    throw new Error(
+      "No exportable catalog rows were found for this workspace yet. Pick a workspace with cataloged songs or wait for harvest to finish."
+    );
+  }
   const prepared = await buildExportRowsForWorkspace(workspaceRows);
+  if (prepared.exportRows.length === 0) {
+    throw new Error(
+      "We found the workspace, but there were no exportable song assets ready to package yet. Try again after the catalog finishes syncing."
+    );
+  }
   const parts = shardExportRows(prepared.exportRows);
 
   const manifestRows = prepared.exportRows.map((row, index) => {
@@ -690,11 +842,21 @@ async function runCatalogExportJob(job, context, accessToken) {
   const summaryPath = path.join(job.jobDir, "summary.json");
   fs.writeFileSync(manifestPath, manifestCsv, "utf8");
   fs.writeFileSync(summaryPath, summaryJson, "utf8");
+  setCatalogExportProgress(job, {
+    phaseLabel: "Building packages",
+    progressMessage: `Preparing ${parts.length.toLocaleString()} ZIP package part${parts.length === 1 ? "" : "s"}.`,
+    stepCurrent: 3,
+  });
 
   const completedParts = [];
-  for (const part of parts) {
-    job.status = "building";
-    job.updatedAt = new Date().toISOString();
+  for (const [index, part] of parts.entries()) {
+    setCatalogExportProgress(job, {
+      status: "building",
+      phaseLabel: "Building packages",
+      progressMessage: `Building ZIP ${index + 1} of ${parts.length}: ${part.partName}`,
+      stepCurrent: 3,
+      currentPart: index + 1,
+    });
     const filePath = path.join(job.jobDir, part.partName);
     const sizeBytes = await writeZipPart(part, manifestCsv, summaryJson, filePath);
     completedParts.push({
@@ -720,8 +882,21 @@ async function runCatalogExportJob(job, context, accessToken) {
   job.partCount = completedParts.length;
   job.parts = completedParts;
   job.summary = summary;
-  job.status = "ready";
-  job.updatedAt = new Date().toISOString();
+  setCatalogExportProgress(job, {
+    status: "ready",
+    phaseLabel: "Ready",
+    progressMessage: `Package ready. ${completedParts.length.toLocaleString()} ZIP part${completedParts.length === 1 ? "" : "s"} and the manifests are available below.`,
+    stepCurrent: 4,
+    currentPart: completedParts.length,
+  });
+  if (context?.user?.email) {
+    await safeSendNotificationEmail({
+      accessToken,
+      to: context.user.email,
+      subject: `Catalog download ready: ${summary.workspaceName || job.workspaceId}`,
+      html: buildCatalogExportReadyEmail({ job, context, summary }),
+    });
+  }
 }
 
 function renderPage({ title, heading, body, pathname = "/" }) {
@@ -1182,7 +1357,7 @@ function buildRequestReceivedEmail(accessRequest) {
     { label: "SUNO handle", value: accessRequest.sunoHandle },
     { label: "SUNO profile", value: accessRequest.sunoProfileUrl },
     { label: "YouTube channel", value: accessRequest.youtubeChannelUrl },
-    { label: "Preferred path after beta", value: accessRequest.preferredUpgradePlanId || "creator_monthly" },
+    { label: "Preferred path after beta", value: accessRequest.preferredUpgradePlanId || "creator-monthly" },
   ]);
   return notificationShell({
     title: "Beta request received",
@@ -1200,9 +1375,9 @@ function buildRequestApprovedEmail({ accessRequest, workspaceName, role, planId,
   const list = notificationList([
     { label: "Workspace", value: workspaceName || accessRequest.requestedWorkspaceName || "Workspace assigned" },
     { label: "Role", value: role || accessRequest.approvedRole || "viewer" },
-    { label: "Plan", value: planId || accessRequest.approvedPlanId || "beta" },
+    { label: "Plan", value: planId || accessRequest.approvedPlanId || "artist" },
     { label: "Beta access ends", value: betaExpiresAt || accessRequest.betaExpiresAt || "Not set" },
-    { label: "Upgrade target after beta", value: accessRequest.betaMigrationTargetPlanId || accessRequest.preferredUpgradePlanId || "creator_monthly" },
+    { label: "Upgrade target after beta", value: accessRequest.betaMigrationTargetPlanId || accessRequest.preferredUpgradePlanId || "creator-monthly" },
   ]);
   return notificationShell({
     title: "Beta access approved",
@@ -1231,7 +1406,7 @@ function buildRequestDeniedEmail({ accessRequest, reviewNotes }) {
       ${notificationList([
         { label: "SUNO handle", value: accessRequest.sunoHandle },
         { label: "Requested workspace", value: accessRequest.requestedWorkspaceName },
-        { label: "Preferred path after beta", value: accessRequest.preferredUpgradePlanId || "creator_monthly" },
+        { label: "Preferred path after beta", value: accessRequest.preferredUpgradePlanId || "creator-monthly" },
       ])}
     `,
   });
@@ -1249,7 +1424,7 @@ function buildOperatorRequestEmail(accessRequest) {
         { label: "SUNO profile", value: accessRequest.sunoProfileUrl },
         { label: "YouTube channel", value: accessRequest.youtubeChannelUrl },
         { label: "Requested workspace", value: accessRequest.requestedWorkspaceName },
-        { label: "Preferred upgrade path", value: accessRequest.preferredUpgradePlanId || "creator_monthly" },
+        { label: "Preferred upgrade path", value: accessRequest.preferredUpgradePlanId || "creator-monthly" },
       ])}
       <p style="margin:18px 0 0;">Intended use:</p>
       <div style="margin-top:10px;padding:14px 16px;background:#171a31;border:1px solid #2b2f57;border-radius:16px;color:#eef0ff;">${accessRequest.intendedUse || "No intended use was provided."}</div>
@@ -1569,16 +1744,15 @@ function signupTierDefaults(requestedTier, requestKind) {
     return SIGNUP_TIER_DEFAULTS[requested];
   }
   if (String(requestKind || "").trim() === "paid") {
-    return SIGNUP_TIER_DEFAULTS.creator_monthly;
+    return SIGNUP_TIER_DEFAULTS.creator;
   }
-  if (String(requestKind || "").trim() === "free") {
-    return SIGNUP_TIER_DEFAULTS.free;
-  }
-  return SIGNUP_TIER_DEFAULTS.beta;
+  return SIGNUP_TIER_DEFAULTS.artist;
 }
 
 function activePublicSignupTierIds() {
-  return BETA_SIGNUP_ONLY ? ["beta"] : Object.keys(SIGNUP_TIER_DEFAULTS);
+  const availableIds = new Set(buildSignupCatalog().map((tier) => normalizePlanKey(tier.id)));
+  const requestedIds = PUBLIC_SIGNUP_TIER_IDS.filter((tierId) => availableIds.has(tierId));
+  return requestedIds.length > 0 ? requestedIds : ["artist", "creator", "producer"];
 }
 
 function isAllowedPublicSignupTier(tierId) {
@@ -1664,6 +1838,7 @@ function buildLegacyWorkspaceSummary() {
     workspaceId: LEGACY_WORKSPACE_ID,
     name: LEGACY_WORKSPACE_NAME,
     slug: "legacy",
+    domains: ["sundrop.music", "sundrop.cloud"],
     role: "owner",
     membershipStatus: "active",
     status: "active",
@@ -1794,7 +1969,7 @@ function buildAccessRequest(doc) {
     requestedWorkspaceId: fsString(doc, "requestedWorkspaceId"),
     requestedWorkspaceName: fsString(doc, "requestedWorkspaceName"),
     requestKind: fsString(doc, "requestKind") || "beta",
-    requestedTier: fsString(doc, "requestedTier") || "beta",
+    requestedTier: fsString(doc, "requestedTier") || "artist",
     status: fsString(doc, "status") || "pending",
     note: fsString(doc, "note"),
     sunoHandle: fsString(doc, "sunoHandle"),
@@ -1920,6 +2095,14 @@ async function resolveRequestContext(req, accessToken) {
     ? null
     : pickActiveWorkspace(effectiveWorkspaces, preferredWorkspaceId, refreshedUserDoc || userDoc);
   const entitlements = activeWorkspace?.entitlements || {};
+  const domainAccess = contextAllowsCurrentDomain(
+    {
+      platformAdmin,
+      legacyMode: false,
+      activeWorkspace,
+    },
+    req
+  );
 
   return {
     authEnabled: true,
@@ -1942,6 +2125,8 @@ async function resolveRequestContext(req, accessToken) {
     platformAdmin,
     adminMode: platformAdmin,
     entitlements,
+    currentDomain: domainAccess.current,
+    domainAccess,
     accessRequest,
     needsApproval: !platformAdmin && effectiveWorkspaces.length === 0 && betaAccess?.status !== "expired",
     betaAccess,
@@ -2117,136 +2302,7 @@ async function summarizeAccessRequests(accessToken) {
 }
 
 function buildSignupCatalog() {
-  return [
-    {
-      id: "beta",
-      lane: "beta",
-      label: "Beta Tester",
-      priceLabel: "$0 during beta",
-      cadence: "approval",
-      summary: "Early access to the Vault and workflow surfaces while we shape the product.",
-      highlights: [
-        "Vault browsing and metadata access",
-        "Feedback-driven early access",
-        "Manual approval from the control center",
-      ],
-      defaultRole: "viewer",
-      defaultPlanId: "beta",
-      trialDays: 0,
-      billingCadences: ["approval"],
-      entitlements: {
-        "vault.browse": true,
-        "vault.search.advanced": true,
-        "catalog.export.local": true,
-        "lyrics.artifacts": true,
-        "styles.normalized": true,
-        "youtube.publish.enabled": true,
-        "admin.reports": false,
-      },
-      limits: {
-        sourcesMax: 3,
-        storageGbIncluded: 10,
-        membersMax: 1,
-        youtubePublishMonthlyLimit: 25,
-      },
-    },
-    {
-      id: "free",
-      lane: "free",
-      label: "Explorer Free",
-      priceLabel: "$0",
-      cadence: "ongoing",
-      summary: "A light personal workspace for browsing, preserving, and learning the system.",
-      highlights: [
-        "Personal workspace",
-        "Starter source and storage limits",
-        "Upgrade path into paid creator tiers",
-      ],
-      defaultRole: "viewer",
-      defaultPlanId: "free",
-      trialDays: 0,
-      billingCadences: ["ongoing"],
-      entitlements: {
-        "vault.browse": true,
-        "vault.search.advanced": false,
-        "catalog.export.local": true,
-        "lyrics.artifacts": true,
-        "styles.normalized": true,
-        "youtube.publish.enabled": false,
-        "admin.reports": false,
-      },
-      limits: {
-        sourcesMax: 1,
-        storageGbIncluded: 5,
-        membersMax: 1,
-        youtubePublishMonthlyLimit: 0,
-      },
-    },
-    {
-      id: "creator_monthly",
-      lane: "paid",
-      label: "Creator Monthly",
-      priceLabel: "$29 / month",
-      cadence: "monthly",
-      summary: "A working creator tier for active cataloging, publishing, and preservation workflows.",
-      highlights: [
-        "Dedicated workspace",
-        "Higher source and storage limits",
-        "Publishing and workflow features",
-      ],
-      defaultRole: "editor",
-      defaultPlanId: "creator-monthly",
-      trialDays: 14,
-      billingCadences: ["monthly", "quarterly", "annual"],
-      entitlements: {
-        "vault.browse": true,
-        "vault.search.advanced": true,
-        "catalog.export.local": true,
-        "lyrics.artifacts": true,
-        "styles.normalized": true,
-        "youtube.publish.enabled": true,
-        "admin.reports": false,
-      },
-      limits: {
-        sourcesMax: 10,
-        storageGbIncluded: 50,
-        membersMax: 2,
-        youtubePublishMonthlyLimit: 150,
-      },
-    },
-    {
-      id: "studio_monthly",
-      lane: "paid",
-      label: "Studio Monthly",
-      priceLabel: "$99 / month",
-      cadence: "monthly",
-      summary: "A team-ready tier for broader operational control and heavier workflow usage.",
-      highlights: [
-        "Shared workspace support",
-        "Admin-grade controls",
-        "Higher operational limits",
-      ],
-      defaultRole: "admin",
-      defaultPlanId: "studio-monthly",
-      trialDays: 14,
-      billingCadences: ["monthly", "quarterly", "annual"],
-      entitlements: {
-        "vault.browse": true,
-        "vault.search.advanced": true,
-        "catalog.export.local": true,
-        "lyrics.artifacts": true,
-        "styles.normalized": true,
-        "youtube.publish.enabled": true,
-        "admin.reports": true,
-      },
-      limits: {
-        sourcesMax: 30,
-        storageGbIncluded: 200,
-        membersMax: 8,
-        youtubePublishMonthlyLimit: 600,
-      },
-    },
-  ];
+  return Array.isArray(tierCatalogConfig?.tiers) ? tierCatalogConfig.tiers : [];
 }
 
 function buildPublicSignupCatalog() {
@@ -2351,12 +2407,67 @@ function mergeWorkspaceEntitlements(planEntitlements, featureOverrides) {
   }
 
   for (const [key, value] of Object.entries(featureOverrides)) {
-    if (typeof value === "boolean" || typeof value === "number") {
+    if (typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
       next[key] = value;
     }
   }
 
   return next;
+}
+
+function normalizeTierDomains(domains) {
+  if (!Array.isArray(domains)) return [];
+  return domains
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function classifyRequestDomain(req) {
+  const hostHeader = String(req?.headers?.["x-forwarded-host"] || req?.headers?.host || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+
+  const hostname = hostHeader || "";
+  if (!hostname) return null;
+
+  if (hostname === CLOUD_HOSTNAME || hostname === "sundrop.cloud" || hostname.startsWith("cloud.")) {
+    return "sundrop.cloud";
+  }
+
+  if (hostname === MUSIC_HOSTNAME || hostname === "sundrop.music" || hostname.startsWith("music.")) {
+    return "sundrop.music";
+  }
+
+  return null;
+}
+
+function contextAllowsCurrentDomain(context, req) {
+  const currentDomain = classifyRequestDomain(req);
+  if (!currentDomain) {
+    return {
+      current: null,
+      activeWorkspaceAllowed: true,
+      activeWorkspaceDomains: normalizeTierDomains(context?.activeWorkspace?.domains),
+    };
+  }
+
+  if (context?.platformAdmin || context?.legacyMode) {
+    return {
+      current: currentDomain,
+      activeWorkspaceAllowed: true,
+      activeWorkspaceDomains: normalizeTierDomains(context?.activeWorkspace?.domains),
+    };
+  }
+
+  const allowedDomains = normalizeTierDomains(context?.activeWorkspace?.domains);
+  return {
+    current: currentDomain,
+    activeWorkspaceAllowed:
+      allowedDomains.length === 0 ? true : allowedDomains.includes(currentDomain),
+    activeWorkspaceDomains: allowedDomains,
+  };
 }
 
 function resolveWorkspaceContract(workspaceDoc, membershipDoc) {
@@ -2381,6 +2492,7 @@ function resolveWorkspaceContract(workspaceDoc, membershipDoc) {
     membershipStatus: membershipDoc ? fsString(membershipDoc, "status") || "active" : "active",
     status: fsString(workspaceDoc, "status") || "active",
     planId,
+    domains: normalizeTierDomains(tier?.domains || fsValueToJs(workspaceDoc.fields?.domains)),
     sourceLimit: fsInt(workspaceDoc, "sourceLimit") || limits.sourcesMax || 0,
     storageLimitGb: fsInt(workspaceDoc, "storageLimitGb") || limits.storageGbIncluded || 0,
     seatLimit: fsInt(workspaceDoc, "seatLimit") || limits.membersMax || 0,
@@ -2441,14 +2553,14 @@ async function ensureBootstrapWorkspaceForUser(decodedToken, accessToken) {
   const workspaceDoc = await fsGetDocByPath(targetWorkspacePath, accessToken);
 
   if (!workspaceDoc) {
-    const tier = findSignupTierByPlanId("beta") || buildSignupCatalog()[0];
+    const tier = findSignupTierByPlanId("artist") || buildSignupCatalog()[0];
     await fsSetDoc(
       fsDocNameFromPath(targetWorkspacePath),
       objectToFsFields({
         name: workspaceName,
         slug: slugifyWorkspaceName(workspaceName || localPart) || workspaceId,
         ownerUid: decodedToken.uid,
-        planId: tier?.defaultPlanId || "beta",
+        planId: tier?.defaultPlanId || "artist",
         status: "active",
         createdAt: now,
         updatedAt: now,
@@ -2548,7 +2660,7 @@ app.post("/api/access-requests", async (req, res) => {
     const rawRequestKind = String(req.body?.requestKind || "beta").trim() || "beta";
     const rawRequestedTier = String(req.body?.requestedTier || "").trim() || signupTierDefaults("", rawRequestKind).planId;
     const requestKind = BETA_SIGNUP_ONLY ? "beta" : rawRequestKind;
-    const requestedTier = BETA_SIGNUP_ONLY ? "beta" : rawRequestedTier;
+    const requestedTier = BETA_SIGNUP_ONLY ? rawRequestedTier : rawRequestedTier;
     if (!isAllowedPublicSignupTier(requestedTier)) {
       return res.status(400).json({ ok: false, error: "Only beta applications are open right now." });
     }
@@ -2558,7 +2670,7 @@ app.post("/api/access-requests", async (req, res) => {
     const sunoProfileUrl = sanitizeBetaApplicationUrl(req.body?.sunoProfileUrl);
     const youtubeChannelUrl = sanitizeBetaApplicationUrl(req.body?.youtubeChannelUrl);
     const intendedUse = String(req.body?.intendedUse || "").trim();
-    const preferredUpgradePlanId = String(req.body?.preferredUpgradePlanId || "creator_monthly").trim() || "creator_monthly";
+    const preferredUpgradePlanId = String(req.body?.preferredUpgradePlanId || "creator-monthly").trim() || "creator-monthly";
 
     if (!sunoHandle) {
       return res.status(400).json({ ok: false, error: "sunoHandle is required" });
@@ -2768,7 +2880,7 @@ app.post("/api/workspaces", async (req, res) => {
     }
 
     const workspaceId = String(req.body?.workspaceId || slug).trim();
-    const tier = findSignupTierByPlanId(req.body?.planId || "free");
+    const tier = findSignupTierByPlanId(req.body?.planId || "artist");
     const now = new Date().toISOString();
     const workspaceDocName = fsDocNameFromPath(`workspaces/${workspaceId}`);
     await fsSetDoc(
@@ -2777,7 +2889,7 @@ app.post("/api/workspaces", async (req, res) => {
         name,
         slug,
         ownerUid,
-        planId: String(req.body?.planId || "free"),
+        planId: String(req.body?.planId || "artist"),
         status: String(req.body?.status || "active"),
         createdAt: now,
         updatedAt: now,
@@ -2913,13 +3025,13 @@ app.post("/api/admin/access-requests/:requestId/approve", async (req, res) => {
     const requestedSunoHandle = normalizeSunoHandle(fsString(requestDoc, "sunoHandle"));
     const requestedSunoProfileUrl = fsString(requestDoc, "sunoProfileUrl");
     const preferredUpgradePlanId =
-      String(req.body?.betaMigrationTargetPlanId || fsString(requestDoc, "preferredUpgradePlanId") || "creator_monthly").trim() ||
-      "creator_monthly";
+      String(req.body?.betaMigrationTargetPlanId || fsString(requestDoc, "preferredUpgradePlanId") || "creator-monthly").trim() ||
+      "creator-monthly";
     const tierDefaults = signupTierDefaults(requestedTier, requestKind);
-    const tier = findSignupTierByPlanId(req.body?.planId || tierDefaults.planId || requestedTier || "beta");
+    const tier = findSignupTierByPlanId(req.body?.planId || tierDefaults.planId || requestedTier || "artist");
     const workspaceMode = String(req.body?.workspaceMode || tierDefaults.workspaceMode || "legacy").trim();
     const role = sanitizeWorkspaceRole(req.body?.role || tierDefaults.role || "viewer");
-    const planId = String(req.body?.planId || tierDefaults.planId || requestedTier || "beta").trim();
+    const planId = String(req.body?.planId || tierDefaults.planId || requestedTier || "artist").trim();
     const requestedWorkspaceId = fsString(requestDoc, "requestedWorkspaceId");
     const requestedWorkspaceName = fsString(requestDoc, "requestedWorkspaceName");
     const explicitWorkspaceId = String(req.body?.workspaceId || requestedWorkspaceId || "").trim();
@@ -3265,18 +3377,7 @@ app.post("/api/catalog-export", async (req, res) => {
     );
 
     if (existingJob) {
-      return res.json({
-        ok: true,
-        exportId: existingJob.exportId,
-        status: existingJob.status,
-        workspaceId: existingJob.workspaceId,
-        partCount: existingJob.partCount || 0,
-        totalRows: existingJob.totalRows || 0,
-        totalBytes: existingJob.totalBytes || 0,
-        missingAssets: existingJob.missingAssets || 0,
-        expiresAt: existingJob.expiresAt,
-        parts: existingJob.parts || [],
-      });
+      return res.json(serializeCatalogExportJob(existingJob));
     }
 
     const job = createCatalogExportJob({
@@ -3286,22 +3387,42 @@ app.post("/api/catalog-export", async (req, res) => {
     });
 
     void runCatalogExportJob(job, { ...context, activeWorkspace: targetWorkspace }, accessToken).catch((error) => {
-      job.status = "error";
-      job.updatedAt = new Date().toISOString();
-      job.error = error?.message || String(error);
+      setCatalogExportProgress(job, {
+        status: "error",
+        phaseLabel: "Failed",
+        progressMessage: "This package did not finish successfully.",
+        error: error?.message || String(error),
+      });
     });
 
-    return res.status(202).json({
-      ok: true,
-      exportId: job.exportId,
-      status: job.status,
-      workspaceId: job.workspaceId,
-      expiresAt: job.expiresAt,
-    });
+    return res.status(202).json(serializeCatalogExportJob(job));
   } catch (error) {
     return res.status(500).json({
       ok: false,
       error: `catalog-export failed: ${error?.message || error}`,
+    });
+  }
+});
+
+app.get("/api/catalog-exports", async (req, res) => {
+  try {
+    cleanupExpiredCatalogExports();
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+
+    const jobs = [...catalogExportJobs.values()]
+      .filter((job) => canAccessCatalogExport(job, context))
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || "") - Date.parse(a.updatedAt || a.createdAt || ""));
+
+    return res.json({
+      ok: true,
+      jobs: jobs.map((job) => serializeCatalogExportJob(job)),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: `catalog-exports failed: ${error?.message || error}`,
     });
   }
 });
@@ -3322,26 +3443,7 @@ app.get("/api/catalog-export/:exportId", async (req, res) => {
       return res.status(403).json({ ok: false, error: "You do not have access to that export." });
     }
 
-    return res.json({
-      ok: true,
-      exportId: job.exportId,
-      workspaceId: job.workspaceId,
-      status: job.status,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-      expiresAt: job.expiresAt,
-      totalRows: job.totalRows || 0,
-      totalAssets: job.totalAssets || 0,
-      totalBytes: job.totalBytes || 0,
-      totalBytesLabel: byteLabel(job.totalBytes || 0),
-      missingAssets: job.missingAssets || 0,
-      partCount: job.partCount || 0,
-      parts: job.parts || [],
-      manifestUrl: `/api/catalog-export/${job.exportId}/manifest`,
-      summaryUrl: `/api/catalog-export/${job.exportId}/summary`,
-      summary: job.summary || null,
-      error: job.error || "",
-    });
+    return res.json(serializeCatalogExportJob(job));
   } catch (error) {
     return res.status(500).json({
       ok: false,

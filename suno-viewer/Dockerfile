@@ -13,6 +13,7 @@ COPY package*.json ./
 RUN npm install --production
 COPY --from=builder /app/dist ./dist
 COPY branding.config.json .
+COPY shared ./shared
 COPY server.js .
 ENV PORT=8080
 EXPOSE 8080

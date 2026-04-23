@@ -66,15 +66,15 @@ export default function AdminControlCenter() {
   }, [])
 
   const accessRequestDraft = (request: AccessRequest): ApprovalDraft => {
-    const tier = signupCatalogById[request.requestedTier || 'beta']
+    const tier = signupCatalogById[request.requestedTier || 'artist']
     return (
       approvalDrafts[request.requestId] || {
-        workspaceMode: request.requestedWorkspaceId ? 'requested' : (tier?.defaultPlanId === 'beta' ? 'new' : 'new'),
+        workspaceMode: request.requestedWorkspaceId ? 'requested' : 'new',
         workspaceName: request.requestedWorkspaceName || request.requestedWorkspaceId || request.displayName || request.email.split('@')[0] || 'Workspace',
         role: tier?.defaultRole || 'viewer',
-        planId: tier?.defaultPlanId || request.requestedTier || 'beta',
+        planId: tier?.defaultPlanId || request.requestedTier || 'artist',
         betaExpiresAt: request.betaExpiresAt || '',
-        migrationTargetPlanId: request.betaMigrationTargetPlanId || request.preferredUpgradePlanId || 'creator_monthly',
+        migrationTargetPlanId: request.betaMigrationTargetPlanId || request.preferredUpgradePlanId || 'creator-monthly',
         reviewNotes: '',
       }
     )
@@ -394,7 +394,7 @@ export default function AdminControlCenter() {
                   <article key={request.requestId} style={requestCardLayoutStyle}>
                     {(() => {
                       const draft = accessRequestDraft(request)
-                      const tier = signupCatalogById[request.requestedTier || 'beta']
+                      const tier = signupCatalogById[request.requestedTier || 'artist']
                       return (
                         <>
                     <div style={requestTitleRowLayoutStyle}>
@@ -404,7 +404,7 @@ export default function AdminControlCenter() {
                     <p style={bodyStyle}>{request.email}</p>
                     <p style={bodyStyle}>
                       Lane: <strong>{request.requestKind || 'beta'}</strong> · Tier:{' '}
-                      <strong>{request.requestedTier || 'beta'}</strong>
+                      <strong>{request.requestedTier || 'artist'}</strong>
                     </p>
                     {tier && <p style={bodyStyle}>{tier.summary}</p>}
                     {request.requestedWorkspaceName && (
@@ -521,7 +521,7 @@ export default function AdminControlCenter() {
                               onChange={(event) => updateDraft(request.requestId, { migrationTargetPlanId: event.target.value })}
                             >
                               {signupCatalog
-                                .filter((tierOption) => tierOption.id === 'creator_monthly' || tierOption.id === 'studio_monthly')
+                                .filter((tierOption) => tierOption.id !== 'artist')
                                 .map((tierOption) => (
                                   <option key={tierOption.defaultPlanId} value={tierOption.defaultPlanId}>
                                     {tierOption.label}
@@ -542,7 +542,7 @@ export default function AdminControlCenter() {
                                     Beta expiry: {draft.betaExpiresAt || 'Use default beta window'}
                                   </span>
                                   <span>
-                                    Migrate to: {draft.migrationTargetPlanId || 'creator_monthly'}
+                                    Migrate to: {draft.migrationTargetPlanId || 'creator-monthly'}
                                   </span>
                                   <span>
                                     Defaults: {selectedTier.limits.sourcesMax} sources · {selectedTier.limits.storageGbIncluded} GB ·{' '}
@@ -583,7 +583,7 @@ export default function AdminControlCenter() {
                         <strong>Beta lifecycle</strong>
                         <span>Approved at: {request.betaApprovedAt || 'n/a'}</span>
                         <span>Expires at: {request.betaExpiresAt || 'default window'}</span>
-                        <span>Migration target: {request.betaMigrationTargetPlanId || request.preferredUpgradePlanId || 'creator_monthly'}</span>
+                        <span>Migration target: {request.betaMigrationTargetPlanId || request.preferredUpgradePlanId || 'creator-monthly'}</span>
                       </div>
                     )}
                     {request.status !== 'pending' && (
@@ -600,7 +600,7 @@ export default function AdminControlCenter() {
                       <p style={bodyStyle}>
                         Approved into <strong>{request.approvedWorkspaceId || 'workspace pending'}</strong> · role{' '}
                         <strong>{request.approvedRole || 'viewer'}</strong> · plan{' '}
-                        <strong>{request.approvedPlanId || request.approvedTier || 'beta'}</strong>
+                        <strong>{request.approvedPlanId || request.approvedTier || 'artist'}</strong>
                       </p>
                     )}
                     {(request.status === 'denied' || request.status === 'withdrawn') && (

@@ -39,6 +39,18 @@ def safe_file_part(value: str, fallback: str = "untitled") -> str:
     return (cleaned[:80] if cleaned else fallback)
 
 
+def build_export_file_stem(row: Dict[str, str]) -> str:
+    song_key = safe_file_part(row.get("songKey") or "", "song")
+    return song_key or "song"
+
+
+def manifest_file_name_for_part(part_name: str, kind: str) -> str:
+    stem = safe_file_part(str(part_name or "").replace(".zip", ""), "catalog_part")
+    if kind == "summary":
+        return f"{stem}.summary.json"
+    return f"{stem}.catalog.csv"
+
+
 def byte_label(num: int) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     value = float(max(num, 0))
@@ -138,23 +150,21 @@ def build_export_rows(client: storage.Client, rows: Iterable[Dict[str, str]]) ->
     missing_assets = 0
 
     for row in rows:
-        song_key = safe_file_part(row.get("songKey") or "")
-        title = row.get("title") or ""
-        title_part = safe_file_part(title, song_key or "song")
-        base_name = f"{song_key} {title_part}".strip()
+        song_key = safe_file_part(row.get("songKey") or "", "song")
+        file_stem = build_export_file_stem(row)
 
         audio = resolve_blob_asset(
             client,
             "audio",
             row.get("gcs_latest_audio") or row.get("gcs_mp3") or row.get("audio_url") or "",
-            f"audio/{base_name}{ext_from_path(row.get('gcs_latest_audio') or row.get('gcs_mp3') or row.get('audio_url'), '.mp3')}",
+            f"audio/{file_stem}{ext_from_path(row.get('gcs_latest_audio') or row.get('gcs_mp3') or row.get('audio_url'), '.mp3')}",
             "missing_audio",
         )
         image = resolve_blob_asset(
             client,
             "thumb",
             row.get("gcs_latest_thumb") or row.get("gcs_thumb") or row.get("image_url") or "",
-            f"images/thumbs/{base_name}{ext_from_path(row.get('gcs_latest_thumb') or row.get('gcs_thumb') or row.get('image_url'), '.jpg')}",
+            f"images/thumbs/{file_stem}{ext_from_path(row.get('gcs_latest_thumb') or row.get('gcs_thumb') or row.get('image_url'), '.jpg')}",
             "missing_image",
         )
         lyrics_txt_path = row.get("gcsLyricsTxt") or ""
@@ -164,13 +174,13 @@ def build_export_rows(client: storage.Client, rows: Iterable[Dict[str, str]]) ->
                 client,
                 "lyrics_txt",
                 lyrics_txt_path,
-                f"lyrics/txt/{base_name}.txt",
+                f"lyrics/txt/{file_stem}.txt",
                 "missing_lyrics",
             )
         elif inline_lyrics:
             lyrics_txt = AssetDescriptor(
                 kind="lyrics_txt",
-                export_path=f"lyrics/txt/{base_name}.txt",
+                export_path=f"lyrics/txt/{file_stem}.txt",
                 exists=True,
                 estimated_bytes=len(inline_lyrics.encode("utf-8")),
                 inline_content=inline_lyrics,
@@ -178,7 +188,7 @@ def build_export_rows(client: storage.Client, rows: Iterable[Dict[str, str]]) ->
         else:
             lyrics_txt = AssetDescriptor(
                 kind="lyrics_txt",
-                export_path=f"lyrics/txt/{base_name}.txt",
+                export_path=f"lyrics/txt/{file_stem}.txt",
                 exists=False,
                 note="missing_lyrics",
             )
@@ -187,7 +197,7 @@ def build_export_rows(client: storage.Client, rows: Iterable[Dict[str, str]]) ->
             client,
             "lyrics_vtt",
             row.get("gcsLyricsVtt") or "",
-            f"lyrics/vtt/{base_name}.vtt",
+            f"lyrics/vtt/{file_stem}.vtt",
             "missing_lyrics_vtt",
         )
 
@@ -211,6 +221,7 @@ def build_export_rows(client: storage.Client, rows: Iterable[Dict[str, str]]) ->
                     "imagePath": image.export_path if image.exists else "",
                     "lyricsTxtPath": lyrics_txt.export_path if lyrics_txt.exists else "",
                     "lyricsVttPath": lyrics_vtt.export_path if lyrics_vtt.exists else "",
+                    "exportFileStem": file_stem,
                     "exportPart": "",
                     "assetStatus": "complete"
                     if not missing_notes
@@ -252,8 +263,19 @@ def write_zip_part(
 ) -> int:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        zf.writestr("manifest/catalog.csv", manifest_csv)
-        zf.writestr("manifest/summary.json", summary_json)
+        zf.writestr(f"manifest/{manifest_file_name_for_part(part['part_name'], 'catalog')}", manifest_csv)
+        zf.writestr(f"manifest/{manifest_file_name_for_part(part['part_name'], 'summary')}", summary_json)
+        zf.writestr(
+            "manifest/README.txt",
+            "\n".join(
+                [
+                    "Unzip each catalog part into the same parent folder.",
+                    "Audio, image, and lyrics filenames are already unique and safe to merge.",
+                    "Manifest files are named per-part so they do not overwrite each other.",
+                    "",
+                ]
+            ),
+        )
         for row in part["rows"]:
             for asset in row["assets"]:
                 if not asset.exists:

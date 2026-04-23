@@ -96,8 +96,9 @@ export interface WorkspaceSummary {
   sourceLimit?: number
   storageLimitGb?: number
   seatLimit?: number
+  domains?: string[]
   features?: Record<string, unknown>
-  entitlements?: Record<string, boolean | number>
+  entitlements?: Record<string, boolean | number | string>
   limits?: {
     sourcesMax: number
     storageGbIncluded: number
@@ -126,7 +127,13 @@ export interface AuthSession {
   workspaces: WorkspaceSummary[]
   platformAdmin: boolean
   adminMode: boolean
-  entitlements?: Record<string, boolean | number>
+  entitlements?: Record<string, boolean | number | string>
+  currentDomain?: string | null
+  domainAccess?: {
+    current: string | null
+    activeWorkspaceAllowed: boolean
+    activeWorkspaceDomains: string[]
+  }
   accessRequest: AccessRequest | null
   needsApproval: boolean
   betaAccess?: BetaAccessState | null
@@ -169,6 +176,9 @@ export interface SignupTierOption {
   id: string
   label: string
   lane: AccessRequestKind
+  domains?: string[]
+  publicBetaVisible?: boolean
+  adminOnly?: boolean
   priceLabel: string
   cadence: string
   summary: string
@@ -177,7 +187,7 @@ export interface SignupTierOption {
   defaultPlanId: string
   trialDays?: number
   billingCadences?: string[]
-  entitlements: Record<string, boolean | number>
+  entitlements: Record<string, boolean | number | string>
   limits: {
     sourcesMax: number
     storageGbIncluded: number

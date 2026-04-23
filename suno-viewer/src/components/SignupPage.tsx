@@ -1,28 +1,9 @@
 import type { CSSProperties } from 'react'
 import AuthControls from './AuthControls'
-import { signupCatalogById } from '../lib/signupCatalog'
+import { signupCatalog } from '../lib/signupCatalog'
 import { useMediaQuery } from '../lib/useMediaQuery'
 
 const SUPPORT_EMAIL = 'blahnikdigitaldesigns@gmail.com'
-
-const futureVectors = [
-  {
-    id: 'creator_monthly',
-    lane: 'TARGET 01',
-    title: 'Creator Monthly',
-    price: '$29 / mo',
-    summary: 'Enhanced throughput and priority node allocation once the beta concludes.',
-    accent: '#00e3fd',
-  },
-  {
-    id: 'studio_monthly',
-    lane: 'TARGET 02',
-    title: 'Studio Monthly',
-    price: '$99 / mo',
-    summary: 'Multi-seat licensing and higher-fidelity extensions for teams.',
-    accent: '#cdbdff',
-  },
-]
 
 const accessSteps = [
   {
@@ -44,9 +25,8 @@ const accessSteps = [
 
 export default function SignupPage() {
   const isCompact = useMediaQuery('(max-width: 980px)')
-  const betaTier = signupCatalogById.beta
-  const creatorTier = signupCatalogById.creator_monthly
-  const studioTier = signupCatalogById.studio_monthly
+  const publicBetaTiers = signupCatalog.filter((tier) => tier.publicBetaVisible)
+  const footerTiers = signupCatalog.filter((tier) => tier.publicBetaVisible || tier.adminOnly)
 
   return (
     <div style={pageStyle}>
@@ -104,34 +84,25 @@ export default function SignupPage() {
               <div style={panelTopRowStyle}>
                 <div>
                   <p style={panelKickerStyle}>Platform lane</p>
-                  <h2 style={panelTitleStyle}>Beta Tester Tier</h2>
+                  <h2 style={panelTitleStyle}>Beta Access Lanes</h2>
                 </div>
                 <div style={statusBadgeStyle}>Current offering</div>
               </div>
 
-              <div style={featureGridStyle}>
-                <ul style={bulletListStyle}>
-                  <li style={bulletItemStyle}>
-                    <span style={bulletDotStyle} />
-                    <span>
-                      Cost: <strong>$0.00</strong> during beta
-                    </span>
-                  </li>
-                  <li style={bulletItemStyle}>
-                    <span style={bulletDotStyle} />
-                    <span>Full vault access</span>
-                  </li>
-                </ul>
-                <ul style={bulletListStyle}>
-                  <li style={bulletItemStyle}>
-                    <span style={bulletDotStyle} />
-                    <span>Feedback-driven shaping</span>
-                  </li>
-                  <li style={bulletItemStyle}>
-                    <span style={bulletDotStyle} />
-                    <span>Manual approval required</span>
-                  </li>
-                </ul>
+              <div style={futureVectorGridStyle}>
+                {publicBetaTiers.map((tier, index) => (
+                  <article
+                    key={tier.id}
+                    style={futureVectorCardStyle(index % 2 === 0 ? '#00e3fd' : '#cdbdff')}
+                  >
+                    <p style={futureVectorLaneStyle}>{tier.domains?.join(' + ') || tier.lane}</p>
+                    <div style={futureVectorTitleRowStyle}>
+                      <h3 style={futureVectorTitleStyle}>{tier.label}</h3>
+                      <span style={futureVectorPriceStyle}>{tier.priceLabel}</span>
+                    </div>
+                    <p style={futureVectorBodyStyle}>{tier.summary}</p>
+                  </article>
+                ))}
               </div>
             </article>
 
@@ -142,14 +113,14 @@ export default function SignupPage() {
               </div>
 
               <div style={futureVectorGridStyle}>
-                {futureVectors.map((vector) => (
-                  <article key={vector.id} style={futureVectorCardStyle(vector.accent)}>
-                    <p style={futureVectorLaneStyle}>{vector.lane}</p>
+                {footerTiers.map((tier, index) => (
+                  <article key={tier.id} style={futureVectorCardStyle(index % 2 === 0 ? '#00e3fd' : '#cdbdff')}>
+                    <p style={futureVectorLaneStyle}>{tier.id === 'executive' ? 'INVITE' : `TARGET ${String(index + 1).padStart(2, '0')}`}</p>
                     <div style={futureVectorTitleRowStyle}>
-                      <h3 style={futureVectorTitleStyle}>{vector.title}</h3>
-                      <span style={futureVectorPriceStyle}>{vector.price}</span>
+                      <h3 style={futureVectorTitleStyle}>{tier.label}</h3>
+                      <span style={futureVectorPriceStyle}>{tier.priceLabel}</span>
                     </div>
-                    <p style={futureVectorBodyStyle}>{vector.summary}</p>
+                    <p style={futureVectorBodyStyle}>{tier.summary}</p>
                   </article>
                 ))}
               </div>
@@ -192,7 +163,7 @@ export default function SignupPage() {
           </div>
 
           <aside id="request" style={rightRailStyle(isCompact)}>
-            <AuthControls variant="signup" preferredTierId="beta" />
+            <AuthControls variant="signup" preferredTierId="creator" />
           </aside>
         </section>
 
@@ -203,13 +174,11 @@ export default function SignupPage() {
             <span>The vault stays separate.</span>
           </div>
           <div style={footerMetaStyle}>
-            <span>{betaTier.summary}</span>
-            <span>
-              {creatorTier.label}: {creatorTier.priceLabel}
-            </span>
-            <span>
-              {studioTier.label}: {studioTier.priceLabel}
-            </span>
+            {footerTiers.map((tier) => (
+              <span key={tier.id}>
+                {tier.label}: {tier.priceLabel}
+              </span>
+            ))}
           </div>
         </section>
       </main>
@@ -437,39 +406,6 @@ const statusBadgeStyle: CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.24em',
   whiteSpace: 'nowrap',
-}
-
-const featureGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-  gap: 18,
-}
-
-const bulletListStyle: CSSProperties = {
-  listStyle: 'none',
-  padding: 0,
-  margin: 0,
-  display: 'grid',
-  gap: 16,
-}
-
-const bulletItemStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 12,
-  color: '#e7e5e7',
-  lineHeight: 1.6,
-  fontSize: 15,
-}
-
-const bulletDotStyle: CSSProperties = {
-  width: 10,
-  height: 10,
-  borderRadius: '50%',
-  marginTop: 6,
-  background: '#81ecff',
-  boxShadow: '0 0 0 4px rgba(129, 236, 255, 0.08)',
-  flex: '0 0 auto',
 }
 
 const sectionBlockStyle: CSSProperties = {

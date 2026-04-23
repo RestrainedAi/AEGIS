@@ -67,6 +67,11 @@ type CatalogExportJob = {
   exportId: string
   workspaceId: string
   status: 'preparing' | 'building' | 'ready' | 'error'
+  phaseLabel?: string
+  progressMessage?: string
+  stepCurrent?: number
+  stepTotal?: number
+  currentPart?: number
   createdAt?: string
   updatedAt?: string
   expiresAt?: string
@@ -80,6 +85,45 @@ type CatalogExportJob = {
   manifestUrl: string
   summaryUrl?: string
   error?: string
+}
+
+type CatalogDownloadListItem = {
+  key: string
+  label: string
+  typeLabel: string
+  sizeLabel: string
+  actionLabel: string
+  downloadUrl: string
+  fileName: string
+}
+
+type DownloadAccess = {
+  centerEnabled: boolean
+  singleEnabled: boolean
+  batchEnabled: boolean
+  catalogEnabled: boolean
+  maxBatchSize: number
+}
+
+type VaultSection = 'archives' | 'downloads' | 'security' | 'truth' | 'history'
+
+const SUPPORT_EMAIL = 'blahnikdigitaldesigns@gmail.com'
+const MISSING_ASSET_GRACE_MS = 24 * 60 * 60 * 1000
+
+const catalogExportStatusLabel = (job: CatalogExportJob) => {
+  if (job.phaseLabel) return job.phaseLabel
+  switch (job.status) {
+    case 'preparing':
+      return 'Preparing'
+    case 'building':
+      return 'Building'
+    case 'ready':
+      return 'Ready'
+    case 'error':
+      return 'Failed'
+    default:
+      return job.status
+  }
 }
 
 // ── CSV parser (supports quoted fields, escaped quotes, and embedded newlines) ──
@@ -310,6 +354,63 @@ const styleTokensForSong = (song: SunoSong) => {
   if (displayTags.length > 0) return displayTags
 
   return parseMetadataList(song.tags)
+}
+
+const hasVaultMetadata = (song: SunoSong) =>
+  Boolean(
+    styleTokensForSong(song).length > 0 ||
+    normalizePublishText(song.description) ||
+    normalizePublishText(song.caption) ||
+    normalizePublishText(song.prompt)
+  )
+
+type MissingAssetState = {
+  phase: 'processing' | 'attention'
+  label: string
+  body: string
+  actionLabel: string
+  actionHref: string
+}
+
+const buildMissingAssetState = (song: SunoSong): MissingAssetState | null => {
+  const hasLyrics = Boolean(
+    formatLyricsText(song.lyrics) ||
+    song.gcsLyricsTxt ||
+    song.gcsLyricsVtt
+  )
+  if (hasLyrics || hasVaultMetadata(song)) return null
+
+  const createdAtMs = Date.parse(song.createdAt || '')
+  const ageMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
+  const olderThanGraceWindow = ageMs >= MISSING_ASSET_GRACE_MS
+  const subject = olderThanGraceWindow
+    ? `Sundrop repair request: ${song.title || song.songKey || 'Untitled track'}`
+    : `Sundrop missing assets follow-up: ${song.title || song.songKey || 'Untitled track'}`
+  const body = [
+    `Workspace: ${canonicalAccount(song) || song.account_handle || 'unknown workspace'}`,
+    `Song key: ${song.songKey || 'unknown'}`,
+    `Title: ${song.title || 'Untitled track'}`,
+    '',
+    olderThanGraceWindow
+      ? 'This song is still missing lyrics and metadata after the 24-hour processing window.'
+      : 'This song is still processing and is missing lyrics and metadata.',
+  ].join('\n')
+
+  return olderThanGraceWindow
+    ? {
+        phase: 'attention',
+        label: 'Needs attention',
+        body: 'Lyrics and metadata are still missing after 24 hours. Contact us and we will queue a repair pass.',
+        actionLabel: 'Contact support',
+        actionHref: `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      }
+    : {
+        phase: 'processing',
+        label: 'Still processing',
+        body: 'Lyrics and metadata are still syncing. We keep retrying automatically for up to 24 hours before support needs to step in.',
+        actionLabel: 'What to do',
+        actionHref: `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      }
 }
 
 const saveBlobAsFile = (blob: Blob, filename: string) => {
@@ -1050,6 +1151,7 @@ function SongCard({
   onToggleSelected,
   accountDisplay,
   publishAccess,
+  downloadAccess,
   isFocused,
   onFocusCard,
   desktopInteractive,
@@ -1064,6 +1166,7 @@ function SongCard({
     enabled: boolean
     reason: string
   }
+  downloadAccess: DownloadAccess
   isFocused: boolean
   onFocusCard: (songKey: string) => void
   desktopInteractive: boolean
@@ -1086,12 +1189,15 @@ function SongCard({
     )
   const isRemoved = song.status === 'removed_from_suno'
   const publishDisabled = isPublishBlocked(song, ytState) || !publishAccess.enabled
+  const canDownloadArtifacts = downloadAccess.singleEnabled
+  const canSelectForBatch = downloadAccess.batchEnabled
   const lyricsText = formatLyricsText(song.lyrics)
   const lyricsBlocks = parseLyricsBlocks(song.lyrics)
   const lyricsFileUrl = song.gcsLyricsTxt ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/txt` : ''
   const lyricsVttUrl = song.gcsLyricsVtt ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/vtt` : ''
   const hasLyrics = Boolean(lyricsText || lyricsFileUrl)
   const styleTokens = styleTokensForSong(song).slice(0, 3)
+  const missingAssetState = buildMissingAssetState(song)
   const artworkSrc = useProtectedAssetUrl(thumb)
   const artworkHref = isProtectedAssetUrl(thumb) ? artworkSrc : thumb
   const isExpanded = desktopInteractive ? isFocused : false
@@ -1284,6 +1390,11 @@ function SongCard({
                   fontSize: 10,
                   lineHeight: 1,
                   padding: '4px 8px',
+                  display: 'inline-block',
+                  maxWidth: 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
                 title={song.styleText || song.styles || style}
               >
@@ -1314,48 +1425,67 @@ function SongCard({
             <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 onClick={e => { e.stopPropagation(); setShowLyrics(x => !x) }}
+                disabled={!canDownloadArtifacts}
                 style={{
                   flex: 1,
-                  background: '#18182a',
+                  background: !canDownloadArtifacts ? '#141621' : '#18182a',
                   border: '1px solid #36365c',
                   borderRadius: 6,
-                  color: '#c7c7f0',
+                  color: !canDownloadArtifacts ? '#6d7390' : '#c7c7f0',
                   fontSize: 11,
                   padding: '5px 10px',
-                  cursor: 'pointer',
+                  cursor: canDownloadArtifacts ? 'pointer' : 'not-allowed',
+                  opacity: canDownloadArtifacts ? 1 : 0.7,
                 }}
+                title={canDownloadArtifacts ? 'Toggle lyrics' : 'Artifact downloads are not enabled for the current plan.'}
               >
                 {showLyrics ? 'Hide Lyrics' : 'View Lyrics'}
               </button>
               <button
                 onClick={e => { e.stopPropagation(); downloadLyrics() }}
+                disabled={!canDownloadArtifacts}
                 style={{
                   flex: 1,
-                  background: '#1f2236',
+                  background: !canDownloadArtifacts ? '#141621' : '#1f2236',
                   border: '1px solid #4c5a8a',
                   borderRadius: 6,
-                  color: '#d9e2ff',
+                  color: !canDownloadArtifacts ? '#6d7390' : '#d9e2ff',
                   fontSize: 11,
                   padding: '5px 10px',
-                  cursor: 'pointer',
+                  cursor: canDownloadArtifacts ? 'pointer' : 'not-allowed',
+                  opacity: canDownloadArtifacts ? 1 : 0.7,
                 }}
-                title={lyricsFileUrl ? 'Open saved lyrics file' : 'Download lyrics as a text file'}
+                title={
+                  !canDownloadArtifacts
+                    ? 'Artifact downloads are not enabled for the current plan.'
+                    : lyricsFileUrl
+                      ? 'Open saved lyrics file'
+                      : 'Download lyrics as a text file'
+                }
               >
                 Lyrics TXT
               </button>
               <button
                 onClick={e => { e.stopPropagation(); openLyricsVtt() }}
+                disabled={!canDownloadArtifacts}
                 style={{
                   flex: 1,
-                  background: '#162233',
+                  background: !canDownloadArtifacts ? '#141621' : '#162233',
                   border: '1px solid #3d6b96',
                   borderRadius: 6,
-                  color: '#d9f0ff',
+                  color: !canDownloadArtifacts ? '#6d7390' : '#d9f0ff',
                   fontSize: 11,
                   padding: '5px 10px',
-                  cursor: 'pointer',
+                  cursor: canDownloadArtifacts ? 'pointer' : 'not-allowed',
+                  opacity: canDownloadArtifacts ? 1 : 0.7,
                 }}
-                title={lyricsVttUrl ? 'Open saved lyrics VTT file' : 'Download lyrics as a WebVTT file with synthetic pacing'}
+                title={
+                  !canDownloadArtifacts
+                    ? 'Artifact downloads are not enabled for the current plan.'
+                    : lyricsVttUrl
+                      ? 'Open saved lyrics VTT file'
+                      : 'Download lyrics as a WebVTT file with synthetic pacing'
+                }
               >
                 Lyrics VTT
               </button>
@@ -1363,6 +1493,39 @@ function SongCard({
             {song.lyricsStatus && (
               <div style={{ marginTop: 6, fontSize: 11, color: '#8e96c5' }}>
                 Lyrics status: {song.lyricsStatus}
+              </div>
+            )}
+            {missingAssetState && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: missingAssetState.phase === 'attention' ? 'rgba(92, 31, 31, 0.28)' : 'rgba(33, 44, 70, 0.28)',
+                  border: `1px solid ${missingAssetState.phase === 'attention' ? 'rgba(214, 112, 112, 0.32)' : 'rgba(127, 232, 255, 0.18)'}`,
+                  display: 'grid',
+                  gap: 4,
+                }}
+              >
+                <div
+                  style={{
+                    color: missingAssetState.phase === 'attention' ? '#ffd2d2' : '#dff5ff',
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  {missingAssetState.label}
+                </div>
+                <div style={{ color: '#aeb7d8', fontSize: 11, lineHeight: 1.5 }}>
+                  {missingAssetState.body}
+                </div>
+                <a
+                  href={missingAssetState.actionHref}
+                  onClick={event => event.stopPropagation()}
+                  style={{ color: '#9be6ff', fontSize: 11, textDecoration: 'none' }}
+                >
+                  {missingAssetState.actionLabel}
+                </a>
               </div>
             )}
             {showLyrics && lyricsText && (
@@ -1411,7 +1574,8 @@ function SongCard({
               type="checkbox"
               checked={selected}
               onChange={e => { e.stopPropagation(); onToggleSelected(song) }}
-              style={{ accentColor: '#7c6fff', cursor: 'pointer' }}
+              disabled={!canSelectForBatch}
+              style={{ accentColor: '#7c6fff', cursor: canSelectForBatch ? 'pointer' : 'not-allowed' }}
             />
             Select
           </label>
@@ -1708,6 +1872,7 @@ function CatalogRow({
   onQueueForYouTube,
   ytState,
   publishAccess,
+  downloadAccess,
 }: {
   song: SunoSong
   selected: boolean
@@ -1718,6 +1883,7 @@ function CatalogRow({
     enabled: boolean
     reason: string
   }
+  downloadAccess: DownloadAccess
 }) {
   const [showLyrics, setShowLyrics] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
@@ -1734,6 +1900,7 @@ function CatalogRow({
   const lyricsVttUrl = song.gcsLyricsVtt
     ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/vtt`
     : ''
+  const missingAssetState = buildMissingAssetState(song)
 
   const audioCandidate =
     song.audio_url ||
@@ -1743,16 +1910,20 @@ function CatalogRow({
   const audioUrl = isHttpUrl(audioCandidate) || isProtectedAssetUrl(audioCandidate) ? audioCandidate : ''
 
   const artworkCandidate =
-    song.image_url ||
-    song.gcs_latest_thumb ||
-    song.gcs_thumb ||
-    songMediaProxyUrl(song.songKey, 'thumb')
+    (isHttpUrl(song.image_url) && song.image_url) ||
+    (isHttpUrl(song.gcs_latest_thumb) && song.gcs_latest_thumb) ||
+    (isHttpUrl(song.gcs_thumb) && song.gcs_thumb) ||
+    ((isGsUrl(song.gcs_latest_thumb) || isGsUrl(song.gcs_thumb)) &&
+      songMediaProxyUrl(song.songKey, 'thumb')) ||
+    (song.songKey ? `https://cdn2.suno.ai/image_${song.songKey}.jpeg` : '')
   const artworkUrl = useProtectedAssetUrl(artworkCandidate)
 
   const publishDisabled =
     !publishAccess.enabled ||
     isPublishBlocked(song, ytState) ||
     !song.songKey
+  const canDownloadArtifacts = downloadAccess.singleEnabled
+  const canSelectForBatch = downloadAccess.batchEnabled
 
   const downloadProtectedFile = useCallback(async (url: string, fallbackName: string) => {
     try {
@@ -1841,6 +2012,10 @@ function CatalogRow({
                 letterSpacing: '.08em',
                 textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
+                display: 'inline-block',
+                maxWidth: 240,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}>
                 {token}
               </span>
@@ -1879,6 +2054,35 @@ function CatalogRow({
           <div style={{ color: isRemoved ? '#c17b7b' : '#8ca3c7', fontSize: 11 }}>
             {isRemoved ? 'Removed from Suno' : 'Active in Vault'}
           </div>
+          {missingAssetState && (
+            <div style={{
+              marginTop: 8,
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: missingAssetState.phase === 'attention' ? 'rgba(92, 31, 31, 0.24)' : 'rgba(33, 44, 70, 0.22)',
+              border: `1px solid ${missingAssetState.phase === 'attention' ? 'rgba(214, 112, 112, 0.28)' : 'rgba(127,236,255,0.15)'}`,
+              display: 'grid',
+              gap: 4,
+            }}>
+              <div style={{
+                color: missingAssetState.phase === 'attention' ? '#ffd2d2' : '#dff5ff',
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '.04em',
+              }}>
+                {missingAssetState.label}
+              </div>
+              <div style={{ color: '#9eb1d4', fontSize: 11, lineHeight: 1.45 }}>
+                {missingAssetState.body}
+              </div>
+              <a
+                href={missingAssetState.actionHref}
+                style={{ color: '#9be6ff', fontSize: 11, textDecoration: 'none' }}
+              >
+                {missingAssetState.actionLabel}
+              </a>
+            </div>
+          )}
           {(song.description || song.caption || song.prompt) && (
             <div style={{
               color: '#727a93',
@@ -1901,23 +2105,31 @@ function CatalogRow({
           </button>
           <button
             onClick={() => setShowLyrics(v => !v)}
-            disabled={!hasLyrics}
-            style={catalogActionButtonStyle(!hasLyrics)}
-            title={hasLyrics ? 'Toggle lyrics' : 'No lyrics in catalog yet'}
+            disabled={!hasLyrics || !canDownloadArtifacts}
+            style={catalogActionButtonStyle(!hasLyrics || !canDownloadArtifacts)}
+            title={
+              !canDownloadArtifacts
+                ? 'Artifact downloads are not enabled for the current plan.'
+                : hasLyrics
+                  ? 'Toggle lyrics'
+                  : 'No lyrics in catalog yet'
+            }
           >
             Lyrics
           </button>
           <button
             onClick={() => lyricsFileUrl && void downloadProtectedFile(lyricsFileUrl, `${makeSafeFilePart(song.title || song.songKey)} lyrics.txt`)}
-            disabled={!lyricsFileUrl}
-            style={catalogActionButtonStyle(!lyricsFileUrl)}
+            disabled={!lyricsFileUrl || !canDownloadArtifacts}
+            style={catalogActionButtonStyle(!lyricsFileUrl || !canDownloadArtifacts)}
+            title={canDownloadArtifacts ? 'Download lyrics TXT' : 'Artifact downloads are not enabled for the current plan.'}
           >
             TXT
           </button>
           <button
             onClick={() => lyricsVttUrl && void downloadProtectedFile(lyricsVttUrl, `${makeSafeFilePart(song.title || song.songKey)} lyrics.vtt`)}
-            disabled={!lyricsVttUrl}
-            style={catalogActionButtonStyle(!lyricsVttUrl)}
+            disabled={!lyricsVttUrl || !canDownloadArtifacts}
+            style={catalogActionButtonStyle(!lyricsVttUrl || !canDownloadArtifacts)}
+            title={canDownloadArtifacts ? 'Download lyrics VTT' : 'Artifact downloads are not enabled for the current plan.'}
           >
             VTT
           </button>
@@ -1936,6 +2148,7 @@ function CatalogRow({
               type="checkbox"
               checked={selected}
               onChange={() => onToggleSelected(song)}
+              disabled={!canSelectForBatch}
               style={{ accentColor: '#81ecff' }}
             />
             Select
@@ -2017,6 +2230,13 @@ export default function VaultGrid() {
     const params = new URLSearchParams(window.location.search)
     return params.get('view') === 'catalog' ? 'catalog' : 'grid'
   }, [])
+  const initialVaultSection = useMemo<VaultSection>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const section = params.get('section')
+    return section === 'downloads' || section === 'security' || section === 'truth' || section === 'history'
+      ? section
+      : 'archives'
+  }, [])
   const [songs, setSongs] = useState<SunoSong[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -2026,6 +2246,7 @@ export default function VaultGrid() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(initialViewMode === 'catalog' ? 50 : 24)
   const [viewMode, setViewMode] = useState<'grid' | 'catalog'>(initialViewMode)
+  const [vaultSection, setVaultSection] = useState<VaultSection>(initialVaultSection)
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth
   )
@@ -2059,6 +2280,9 @@ export default function VaultGrid() {
   const [catalogExportWorking, setCatalogExportWorking] = useState(false)
   const [catalogExportError, setCatalogExportError] = useState<string | null>(null)
   const [selectedExportWorkspaceId, setSelectedExportWorkspaceId] = useState('')
+  const [catalogExportReadyNotice, setCatalogExportReadyNotice] = useState<string | null>(null)
+  const [catalogExportJobs, setCatalogExportJobs] = useState<CatalogExportJob[]>([])
+  const lastReadyExportIdRef = useRef<string | null>(null)
   const canBrowseVault = Boolean(
     session?.platformAdmin ||
     (session?.isAuthenticated &&
@@ -2066,9 +2290,24 @@ export default function VaultGrid() {
       session?.entitlements?.['vault.browse'] &&
       session?.betaAccess?.status !== 'expired')
   )
+  const downloadAccess = useMemo<DownloadAccess>(() => {
+    const maxBatchValue = Number(session?.entitlements?.['downloads.max_batch_size'] ?? 0)
+    return {
+      centerEnabled: Boolean(session?.legacyMode || session?.platformAdmin || session?.entitlements?.['downloads.center']),
+      singleEnabled: Boolean(session?.legacyMode || session?.platformAdmin || session?.entitlements?.['downloads.single']),
+      batchEnabled: Boolean(session?.legacyMode || session?.platformAdmin || session?.entitlements?.['downloads.batch']),
+      catalogEnabled: Boolean(
+        session?.legacyMode ||
+        session?.platformAdmin ||
+        (session?.entitlements?.['downloads.catalog'] && session?.entitlements?.['catalog.export.local'])
+      ),
+      maxBatchSize: Number.isFinite(maxBatchValue) && maxBatchValue > 0 ? maxBatchValue : 0,
+    }
+  }, [session])
   const canExportCatalog = Boolean(
     canBrowseVault &&
-      (session?.platformAdmin || session?.entitlements?.['catalog.export.local'])
+      downloadAccess.centerEnabled &&
+      downloadAccess.catalogEnabled
   )
   const exportWorkspaceOptions = session?.platformAdmin
     ? (session?.workspaces || []).slice().sort((a, b) => (a.name || a.workspaceId).localeCompare(b.name || b.workspaceId))
@@ -2080,11 +2319,40 @@ export default function VaultGrid() {
     exportWorkspaceOptions.find((workspace) => workspace.workspaceId === exportWorkspaceId) ||
     session?.activeWorkspace ||
     null
+  const showDownloadsHome = canBrowseVault && downloadAccess.centerEnabled && vaultSection === 'downloads'
+  const showArchiveHome = vaultSection === 'archives'
+  const showPlaceholderVaultSection = vaultSection === 'security' || vaultSection === 'truth' || vaultSection === 'history'
+  const vaultSectionMeta: Record<Extract<VaultSection, 'security' | 'truth' | 'history'>, { title: string; body: string }> = {
+    security: {
+      title: 'Security Nodes',
+      body: 'This lane is where we will surface repair status, customer-visible asset integrity notices, and vault health signals. For now, the song cards and queue tools are still the clearest live source of truth.',
+    },
+    truth: {
+      title: 'Truth Stream',
+      body: 'Truth Stream will become the running timeline for harvest, packaging, and publishing events. Today those signals still live in Downloads, the queue inspector, and the repair messaging we are adding to songs.',
+    },
+    history: {
+      title: 'Vault History',
+      body: 'Vault History is reserved for package, publish, and repair audit trails. We have not wired the durable event feed yet, so this is now an honest placeholder instead of a dead click.',
+    },
+  }
+  const hasCatalogExports = Boolean(catalogExport || catalogExportJobs.length > 0)
+  const downloadHomeCount = useMemo(() => {
+    const exportIds = new Set(catalogExportJobs.map((job) => job.exportId))
+    if (catalogExport?.exportId) exportIds.add(catalogExport.exportId)
+    return exportIds.size
+  }, [catalogExport, catalogExportJobs])
 
   useEffect(() => {
     if (!session?.activeWorkspace?.workspaceId) return
     setSelectedExportWorkspaceId((current) => current || session.activeWorkspace?.workspaceId || '')
   }, [session?.activeWorkspace?.workspaceId])
+
+  useEffect(() => {
+    if (vaultSection === 'downloads' && !downloadAccess.centerEnabled) {
+      setVaultSection('archives')
+    }
+  }, [downloadAccess.centerEnabled, vaultSection])
 
   // Auto-filter by explicit account query only.
   useEffect(() => {
@@ -2107,8 +2375,13 @@ export default function VaultGrid() {
     } else {
       url.searchParams.delete('view')
     }
+    if (vaultSection !== 'archives') {
+      url.searchParams.set('section', vaultSection)
+    } else {
+      url.searchParams.delete('section')
+    }
     window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
-  }, [viewMode])
+  }, [vaultSection, viewMode])
 
   useEffect(() => {
     if (loadingSession) return
@@ -2197,22 +2470,73 @@ export default function VaultGrid() {
     return payload as CatalogExportJob
   }, [token])
 
+  const loadCatalogExports = useCallback(async () => {
+    const response = await authFetch('/api/catalog-exports', {
+      token,
+      cache: 'no-store',
+    })
+    const payload = await response.json()
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${response.status}`)
+    }
+    setCatalogExportJobs(Array.isArray(payload.jobs) ? payload.jobs as CatalogExportJob[] : [])
+    return Array.isArray(payload.jobs) ? payload.jobs as CatalogExportJob[] : []
+  }, [token])
+
+  useEffect(() => {
+    if (!canExportCatalog) {
+      setCatalogExportJobs([])
+      return
+    }
+
+    void loadCatalogExports().catch((error) => {
+      setCatalogExportError(error instanceof Error ? error.message : String(error))
+    })
+  }, [canExportCatalog, loadCatalogExports])
+
   useEffect(() => {
     if (!catalogExport?.exportId) return
     if (!['preparing', 'building'].includes(catalogExport.status)) return
 
     const timer = window.setTimeout(() => {
-      void loadCatalogExport(catalogExport.exportId).catch((error) => {
+      void Promise.all([
+        loadCatalogExport(catalogExport.exportId),
+        loadCatalogExports(),
+      ]).catch((error) => {
         setCatalogExportError(error instanceof Error ? error.message : String(error))
       })
     }, 1800)
 
     return () => window.clearTimeout(timer)
-  }, [catalogExport?.exportId, catalogExport?.status, loadCatalogExport])
+  }, [catalogExport?.exportId, catalogExport?.status, loadCatalogExport, loadCatalogExports])
+
+  useEffect(() => {
+    if (!catalogExport?.exportId || catalogExport.status !== 'ready') return
+    if (lastReadyExportIdRef.current === catalogExport.exportId) return
+
+    lastReadyExportIdRef.current = catalogExport.exportId
+    setCatalogExportReadyNotice(
+      `${exportWorkspace?.name || exportWorkspace?.workspaceId || 'Workspace'} is ready: ${(catalogExport.partCount || 0).toLocaleString()} package part${catalogExport.partCount === 1 ? '' : 's'} and the manifest are ready.`
+    )
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('Local catalog download ready', {
+          body: `${exportWorkspace?.name || exportWorkspace?.workspaceId || 'Workspace'} is ready to download.`,
+        })
+      } catch {
+        // best effort only
+      }
+    }
+  }, [catalogExport?.exportId, catalogExport?.status, catalogExport?.partCount, exportWorkspace?.name, exportWorkspace?.workspaceId])
 
   const startCatalogExport = useCallback(async () => {
     setCatalogExportWorking(true)
     setCatalogExportError(null)
+    setCatalogExportReadyNotice(null)
+    if (downloadAccess.centerEnabled) {
+      setVaultSection('downloads')
+    }
     try {
       const response = await authFetch('/api/catalog-export', {
         token,
@@ -2228,12 +2552,54 @@ export default function VaultGrid() {
       if (payload?.exportId) {
         await loadCatalogExport(payload.exportId)
       }
+      await loadCatalogExports()
     } catch (error) {
       setCatalogExportError(error instanceof Error ? error.message : String(error))
     } finally {
       setCatalogExportWorking(false)
     }
-  }, [exportWorkspaceId, loadCatalogExport, token])
+  }, [downloadAccess.centerEnabled, exportWorkspaceId, loadCatalogExport, loadCatalogExports, token])
+
+  const activeCatalogExportJobs = useMemo(
+    () => catalogExportJobs.filter((job) => ['preparing', 'building'].includes(job.status)),
+    [catalogExportJobs]
+  )
+
+  const readyCatalogExportJobs = useMemo(
+    () => catalogExportJobs.filter((job) => job.status === 'ready'),
+    [catalogExportJobs]
+  )
+  const latestReadyCatalogExport = useMemo(() => {
+    if (readyCatalogExportJobs.length > 0) return readyCatalogExportJobs[0]
+    return catalogExport?.status === 'ready' ? catalogExport : null
+  }, [catalogExport, readyCatalogExportJobs])
+  const catalogExportHasMeaningfulStats = Boolean(
+    catalogExport &&
+    (
+      (catalogExport.totalRows || 0) > 0 ||
+      (catalogExport.totalAssets || 0) > 0 ||
+      (catalogExport.partCount || 0) > 0 ||
+      (catalogExport.totalBytes || 0) > 0 ||
+      (catalogExport.missingAssets || 0) > 0
+    )
+  )
+  const downloadHomeStatusLabel = useMemo(() => {
+    if (activeCatalogExportJobs.length > 0 && readyCatalogExportJobs.length > 0) {
+      return `${activeCatalogExportJobs.length} packaging · ${readyCatalogExportJobs.length} ready`
+    }
+    if (activeCatalogExportJobs.length > 0) {
+      return `${activeCatalogExportJobs.length} packaging`
+    }
+    if (readyCatalogExportJobs.length > 0) {
+      return `${readyCatalogExportJobs.length} ready`
+    }
+    return 'No packages yet'
+  }, [activeCatalogExportJobs.length, readyCatalogExportJobs.length])
+
+  const catalogExportWorkspaceName = useCallback((workspaceId: string) => {
+    const matchedWorkspace = exportWorkspaceOptions.find((workspace) => workspace.workspaceId === workspaceId)
+    return matchedWorkspace?.name || matchedWorkspace?.slug || workspaceId
+  }, [exportWorkspaceOptions])
 
   const trackPendingPublishKeys = useCallback((songKeys: string[]) => {
     for (const songKey of songKeys) {
@@ -2949,6 +3315,7 @@ export default function VaultGrid() {
     () => Object.keys(selected).filter(k => selected[k]),
     [selected]
   )
+  const selectedBatchOverflow = downloadAccess.maxBatchSize > 0 && selectedKeys.length > downloadAccess.maxBatchSize
   const songsByKey = useMemo(
     () => new Map(songs.map(song => [song.songKey, song])),
     [songs]
@@ -3012,8 +3379,19 @@ export default function VaultGrid() {
   }, [])
 
   const toggleSelected = useCallback((song: SunoSong) => {
-    setSelected(prev => ({ ...prev, [song.songKey]: !prev[song.songKey] }))
-  }, [])
+    if (!downloadAccess.batchEnabled) return
+    setSelected(prev => {
+      const isCurrentlySelected = Boolean(prev[song.songKey])
+      if (
+        !isCurrentlySelected &&
+        downloadAccess.maxBatchSize > 0 &&
+        Object.keys(prev).filter(key => prev[key]).length >= downloadAccess.maxBatchSize
+      ) {
+        return prev
+      }
+      return { ...prev, [song.songKey]: !prev[song.songKey] }
+    })
+  }, [downloadAccess.batchEnabled, downloadAccess.maxBatchSize])
 
   const clearSelection = useCallback(() => setSelected({}), [])
 
@@ -3094,6 +3472,79 @@ export default function VaultGrid() {
   const pageNums = Array.from(
     { length: Math.min(7, total) },
     (_, i) => Math.max(1, Math.min(page - 3, total - 6)) + i
+  )
+  const archiveBody = paged.length === 0 ? (
+    <div style={{ textAlign: 'center', color: '#444', padding: 60, fontSize: 16 }}>
+      No tracks found.
+    </div>
+  ) : viewMode === 'catalog' ? (
+    <div style={{
+      marginBottom: 28,
+      border: '1px solid rgba(129,236,255,0.08)',
+      background: 'linear-gradient(180deg, rgba(12,14,18,0.96), rgba(8,8,10,0.98))',
+      overflowX: 'auto',
+    }}>
+      <div style={{
+        minWidth: 1080,
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '72px minmax(260px, 1.4fr) minmax(120px, 0.7fr) minmax(180px, 0.95fr) minmax(280px, 1.25fr)',
+          gap: 18,
+          padding: '14px 18px',
+          borderBottom: '1px solid rgba(129,236,255,0.08)',
+          color: '#66708b',
+          fontSize: 11,
+          letterSpacing: '.22em',
+          textTransform: 'uppercase',
+        }}>
+          <div>Cover</div>
+          <div>Asset Identity</div>
+          <div>Creator</div>
+          <div>State</div>
+          <div style={{ textAlign: 'right' }}>Catalog Actions</div>
+        </div>
+        <div>
+          {paged.map(song => (
+            <CatalogRow
+              key={song.songKey}
+              song={song}
+              selected={Boolean(selected[song.songKey])}
+              onToggleSelected={toggleSelected}
+              onQueueForYouTube={queueForYouTube}
+              ytState={ytStatus[song.songKey]}
+              publishAccess={publishAccess}
+              downloadAccess={downloadAccess}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: desktopInteractiveGrid
+        ? 'repeat(auto-fill, minmax(250px, 1fr))'
+        : 'repeat(auto-fill, minmax(240px, 1fr))',
+      gap: 16, marginBottom: 32,
+    }}>
+      {paged.map(s => (
+        <SongCard
+          key={s.songKey}
+          song={s}
+          accountDisplay={canonicalAccount(s)}
+          ytState={ytStatus[s.songKey]}
+          onQueueForYouTube={queueForYouTube}
+          selected={Boolean(selected[s.songKey])}
+          onToggleSelected={toggleSelected}
+          publishAccess={publishAccess}
+          downloadAccess={downloadAccess}
+          isFocused={desktopInteractiveGrid && focusedSongKey === s.songKey}
+          onFocusCard={setFocusedSongKey}
+          desktopInteractive={desktopInteractiveGrid}
+        />
+      ))}
+    </div>
   )
 
   return (
@@ -3223,11 +3674,39 @@ export default function VaultGrid() {
             </div>
             <div style={{ display: 'grid', gap: 2 }}>
               {[
-                { label: 'Asset Archives', active: viewMode === 'grid', action: () => { setViewMode('grid'); setPage(1) } },
-                { label: 'Sovereign Catalog', active: viewMode === 'catalog', action: () => { setViewMode('catalog'); setPage(1) } },
-                { label: 'Security Nodes', active: false, action: () => undefined },
-                { label: 'Truth Stream', active: false, action: () => undefined },
-                { label: 'Vault History', active: false, action: () => undefined },
+                {
+                  label: 'Asset Archives',
+                  active: vaultSection === 'archives' && viewMode === 'grid',
+                  action: () => {
+                    setVaultSection('archives')
+                    setViewMode('grid')
+                    setPage(1)
+                  },
+                },
+                {
+                  label: 'Sovereign Catalog',
+                  active: vaultSection === 'archives' && viewMode === 'catalog',
+                  action: () => {
+                    setVaultSection('archives')
+                    setViewMode('catalog')
+                    setPage(1)
+                  },
+                },
+                ...(downloadAccess.centerEnabled
+                  ? [{
+                      label: 'Downloads',
+                      active: vaultSection === 'downloads',
+                      action: () => {
+                        setVaultSection('downloads')
+                        setPage(1)
+                      },
+                      badge: downloadHomeCount > 0 ? downloadHomeCount : null,
+                      detail: downloadHomeStatusLabel,
+                    }]
+                  : []),
+                { label: 'Security Nodes', active: vaultSection === 'security', action: () => setVaultSection('security') },
+                { label: 'Truth Stream', active: vaultSection === 'truth', action: () => setVaultSection('truth') },
+                { label: 'Vault History', active: vaultSection === 'history', action: () => setVaultSection('history') },
               ].map(item => (
                 <button
                   key={item.label}
@@ -3244,9 +3723,38 @@ export default function VaultGrid() {
                     letterSpacing: '.18em',
                     textTransform: 'uppercase',
                     cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
                   }}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {'detail' in item && item.detail ? (
+                      <span style={{
+                        color: item.active ? '#aeefff' : '#6d7897',
+                        fontSize: 9,
+                        letterSpacing: 'normal',
+                        textTransform: 'none',
+                      }}>
+                        {item.detail}
+                      </span>
+                    ) : null}
+                    {'badge' in item && item.badge ? (
+                      <span style={{
+                        minWidth: 20,
+                        padding: '2px 7px',
+                        borderRadius: 999,
+                        background: item.active ? 'rgba(129,236,255,0.18)' : 'rgba(255,255,255,0.06)',
+                        color: item.active ? '#dffcff' : '#a7b0c8',
+                        fontSize: 10,
+                        letterSpacing: 'normal',
+                      }}>
+                        {item.badge}
+                      </span>
+                    ) : null}
+                  </div>
                 </button>
               ))}
             </div>
@@ -3366,6 +3874,64 @@ export default function VaultGrid() {
         )}
       </div>
 
+      {catalogExportReadyNotice && latestReadyCatalogExport && (
+        <div style={{
+          marginBottom: 18,
+          padding: '12px 14px',
+          borderRadius: 12,
+          border: '1px solid rgba(104, 219, 175, 0.35)',
+          background: 'rgba(16, 52, 40, 0.34)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ color: '#dffef4', fontSize: 13, fontWeight: 600 }}>
+              Download package ready
+            </div>
+            <div style={{ color: '#cdeee2', fontSize: 13, lineHeight: 1.55 }}>
+              {catalogExportReadyNotice}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setVaultSection('downloads')}
+              style={{
+                background: '#133125',
+                border: '1px solid rgba(104, 219, 175, 0.35)',
+                borderRadius: 10,
+                color: '#effff8',
+                padding: '9px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Open Downloads
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatalogExportReadyNotice(null)}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 10,
+                color: '#c9d7f0',
+                padding: '9px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showArchiveHome && (
+      <>
       {/* Controls */}
       <div style={{ marginBottom: 20 }}>
         <div style={{
@@ -3533,6 +4099,12 @@ export default function VaultGrid() {
 
         {selectedKeys.length > 0 && (
           <>
+            {downloadAccess.batchEnabled && (
+              <span style={{ color: selectedBatchOverflow ? '#ff9a9a' : '#8b95b1', fontSize: 12 }}>
+                {selectedKeys.length} selected
+                {downloadAccess.maxBatchSize > 0 ? ` · batch cap ${downloadAccess.maxBatchSize}` : ''}
+              </span>
+            )}
             <button
               onClick={publishSelected}
               disabled={!publishEntitled}
@@ -3626,8 +4198,10 @@ export default function VaultGrid() {
           </div>
         )}
       </div>
+      </>
+      )}
 
-      {canBrowseVault && (
+      {showDownloadsHome && (
         <div style={{
           marginBottom: 18,
           padding: isDesktopVaultShell ? '14px 16px' : '12px 14px',
@@ -3650,14 +4224,17 @@ export default function VaultGrid() {
                 Tier 1 portable catalog bundle
               </div>
               <div style={{ color: '#92a0bd', fontSize: 13, lineHeight: 1.65, marginTop: 8 }}>
-                Build a local archive of this workspace with catalog CSV, audio, lyrics, and artwork.
+                Build a local archive of the full selected workspace catalog with CSV, audio, lyrics, and artwork.
                 Large catalogs split automatically into multiple ZIP parts so downloads stay reliable.
               </div>
-              {session?.platformAdmin && exportWorkspaceOptions.length > 0 && (
-                <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#8fa2c5', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
-                    Export workspace
-                  </span>
+              <div style={{ color: '#7f8aa8', fontSize: 12, lineHeight: 1.55, marginTop: 10 }}>
+                Downloads home status: <strong style={{ color: '#dce7ff' }}>{downloadHomeStatusLabel}</strong>
+              </div>
+                {session?.platformAdmin && exportWorkspaceOptions.length > 1 && (
+                  <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#8fa2c5', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                      Export workspace
+                    </span>
                   <select
                     value={exportWorkspaceId}
                     onChange={(event) => {
@@ -3704,48 +4281,8 @@ export default function VaultGrid() {
                   ? 'Preparing export...'
                   : catalogExport?.status === 'ready'
                     ? 'Refresh export package'
-                    : 'Prepare local catalog'}
+                    : 'Prepare full catalog package'}
               </button>
-              {catalogExport?.manifestUrl && catalogExport.status === 'ready' && (
-                <>
-                  <button
-                    onClick={() => void downloadExportArtifact(
-                      catalogExport.manifestUrl,
-                      `${makeSafeFilePart(exportWorkspace?.slug || exportWorkspace?.workspaceId || 'workspace')}-catalog.csv`
-                    )}
-                    style={{
-                      background: '#11131d',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 10,
-                      color: '#c8d4f4',
-                      padding: '10px 14px',
-                      fontSize: 13,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Download CSV
-                  </button>
-                  {catalogExport.summaryUrl && (
-                    <button
-                      onClick={() => void downloadExportArtifact(
-                        catalogExport.summaryUrl!,
-                        `${makeSafeFilePart(exportWorkspace?.slug || exportWorkspace?.workspaceId || 'workspace')}-catalog-summary.json`
-                      )}
-                      style={{
-                        background: '#11131d',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 10,
-                        color: '#c8d4f4',
-                        padding: '10px 14px',
-                        fontSize: 13,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Download summary
-                    </button>
-                  )}
-                </>
-              )}
             </div>
           </div>
 
@@ -3753,10 +4290,13 @@ export default function VaultGrid() {
             <div style={{ marginTop: 12, color: '#8e9bb8', fontSize: 12, lineHeight: 1.55 }}>
               Target workspace: <strong style={{ color: '#dce7ff' }}>{exportWorkspace.name || exportWorkspace.workspaceId}</strong>
               {exportWorkspace.planId ? ` · ${exportWorkspace.planId}` : ''}
+              <div style={{ marginTop: 6 }}>
+                Current scope: <strong style={{ color: '#dce7ff' }}>Full workspace catalog</strong>. Song-by-song and selected-song download flows stay separate.
+              </div>
             </div>
           )}
 
-          {catalogExportError && (
+          {catalogExportError && catalogExport?.status !== 'error' && (
             <div style={{
               marginTop: 12,
               padding: '10px 12px',
@@ -3770,7 +4310,22 @@ export default function VaultGrid() {
             </div>
           )}
 
-          {catalogExport && (
+          {catalogExportReadyNotice && catalogExport?.status === 'ready' && (
+            <div style={{
+              marginTop: 12,
+              padding: '12px 14px',
+              borderRadius: 12,
+              background: 'rgba(21, 63, 49, 0.34)',
+              border: '1px solid rgba(104, 219, 175, 0.35)',
+              color: '#d9fff1',
+              fontSize: 13,
+              lineHeight: 1.55,
+            }}>
+              {catalogExportReadyNotice}
+            </div>
+          )}
+
+          {catalogExport && catalogExportHasMeaningfulStats && (
             <div style={{
               marginTop: 14,
               display: 'grid',
@@ -3807,54 +4362,339 @@ export default function VaultGrid() {
                   {catalogExport.expiresAt ? fmtDateTime(catalogExport.expiresAt) : '—'}
                 </strong>
               </div>
+              <div style={exportMetricCardStyle}>
+                <span style={exportMetricLabelStyle}>Phase</span>
+                <strong style={{ ...exportMetricValueStyle, fontSize: 12 }}>{catalogExportStatusLabel(catalogExport)}</strong>
+              </div>
             </div>
           )}
 
-          {catalogExport?.status === 'ready' && catalogExport.parts.length > 0 && (
-            <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-              {catalogExport.parts.map((part) => (
-                <div
-                  key={part.partName}
+          {catalogExport && catalogExport.status === 'error' && (
+            <div style={{
+              marginTop: 14,
+              padding: '14px 16px',
+              borderRadius: 12,
+              border: '1px solid rgba(190, 72, 72, 0.34)',
+              background: 'rgba(36, 12, 14, 0.82)',
+              color: '#f4d7d6',
+              display: 'grid',
+              gap: 8,
+            }}>
+              <div style={{ color: '#ffb2af', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                Download package unavailable
+              </div>
+              <div style={{ color: '#fff1f1', fontSize: 15, fontWeight: 600 }}>
+                This workspace does not have a downloadable catalog yet.
+              </div>
+              <div style={{ color: '#d9b8b7', fontSize: 13, lineHeight: 1.6 }}>
+                {catalogExport.error || catalogExport.progressMessage || 'Wait for harvest to finish, then try again here.'}
+              </div>
+              <div style={{ color: '#caa5a4', fontSize: 12, lineHeight: 1.55 }}>
+                Scope checked: <strong style={{ color: '#fff1f1' }}>{exportWorkspace?.name || exportWorkspace?.workspaceId || 'selected workspace'}</strong>.
+                Nothing was packaged yet, so there is nothing to download right now.
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 2 }}>
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Download package help: ${exportWorkspace?.name || exportWorkspace?.workspaceId || 'workspace'}`)}&body=${encodeURIComponent(`Hi,\n\nI tried to prepare a full catalog package for ${exportWorkspace?.name || exportWorkspace?.workspaceId || 'this workspace'}, but there were no exportable catalog rows available yet.\n\nPlease help me confirm whether harvest is still running or if this workspace needs attention.\n`)}`}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 12,
-                    flexWrap: 'wrap',
-                    borderRadius: 10,
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: '#0f121b',
-                    padding: '12px 14px',
+                    padding: '8px 12px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(255, 178, 175, 0.32)',
+                    color: '#fff1f1',
+                    textDecoration: 'none',
+                    fontSize: 12,
+                    fontWeight: 600,
                   }}
                 >
-                  <div>
-                    <div style={{ color: '#e5ebff', fontSize: 14, fontWeight: 600 }}>{part.partName}</div>
-                    <div style={{ color: '#8e9bb8', fontSize: 12, marginTop: 4 }}>
-                      {part.rowCount.toLocaleString()} rows · {part.assetCount.toLocaleString()} assets · {part.sizeLabel || fmtBytes(part.sizeBytes)}
+                  Contact support
+                </a>
+              </div>
+            </div>
+          )}
+
+          {catalogExport && ['preparing', 'building'].includes(catalogExport.status) && (
+            <div style={{
+              marginTop: 14,
+              padding: '12px 14px',
+              borderRadius: 12,
+              border: '1px solid rgba(127,232,255,0.14)',
+              background: 'rgba(9, 15, 24, 0.88)',
+              color: '#d8e8ff',
+              display: 'grid',
+              gap: 6,
+            }}>
+              <div style={{ color: '#7fe8ff', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                Packaging in progress
+              </div>
+              <div style={{ color: '#f0f6ff', fontSize: 14, fontWeight: 600 }}>
+                {catalogExport.stepCurrent && catalogExport.stepTotal
+                  ? `Step ${catalogExport.stepCurrent} of ${catalogExport.stepTotal}: ${catalogExportStatusLabel(catalogExport)}`
+                  : catalogExportStatusLabel(catalogExport)}
+              </div>
+              <div style={{ color: '#93a8cb', fontSize: 13, lineHeight: 1.55 }}>
+                {catalogExport.progressMessage || 'We are preparing this download package now.'}
+              </div>
+            </div>
+          )}
+
+          {!hasCatalogExports && (
+            <div style={{
+              marginTop: 16,
+              padding: '16px 18px',
+              borderRadius: 12,
+              border: '1px dashed rgba(127,232,255,0.18)',
+              background: 'rgba(12, 16, 24, 0.82)',
+              display: 'grid',
+              gap: 8,
+            }}>
+              <div style={{ color: '#eff4ff', fontSize: 15, fontWeight: 600 }}>
+                No download packages yet
+              </div>
+              <div style={{ color: '#91a1bf', fontSize: 13, lineHeight: 1.6 }}>
+                This is where packaged downloads will appear for this workspace. Start with <strong style={{ color: '#dce7ff' }}>Prepare full catalog package</strong>
+                to build a downloadable archive of the entire selected workspace, then come back here for the manifest, summary, and ZIP parts as soon as they are ready.
+              </div>
+              <div style={{ color: '#6f7d9d', fontSize: 12, lineHeight: 1.55 }}>
+                For larger catalogs, we split the package into multiple ZIP files automatically so the download stays more reliable on real customer machines.
+              </div>
+            </div>
+          )}
+
+          {(activeCatalogExportJobs.length > 0 || readyCatalogExportJobs.length > 0) && (
+            <div style={{ marginTop: 16, display: 'grid', gap: 14 }}>
+              {activeCatalogExportJobs.length > 0 && (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ color: '#8fa2c5', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                    Download queue
+                  </div>
+                  <div style={{
+                    borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    overflow: 'hidden',
+                    background: '#0f121b',
+                  }}>
+                    {activeCatalogExportJobs.map((job, index) => (
+                      <div
+                        key={job.exportId}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: isDesktopVaultShell ? 'minmax(220px, 1.4fr) minmax(160px, 1fr) minmax(120px, 1fr)' : '1fr',
+                          gap: 12,
+                          padding: '12px 14px',
+                          alignItems: 'center',
+                          borderTop: index === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        <div style={{ display: 'grid', gap: 4 }}>
+                          <div style={{ color: '#e5ebff', fontSize: 14, fontWeight: 600 }}>
+                            {catalogExportWorkspaceName(job.workspaceId)}
+                          </div>
+                          <div style={{ color: '#8fa2c5', fontSize: 12 }}>
+                            {job.stepCurrent && job.stepTotal
+                              ? `Step ${job.stepCurrent} of ${job.stepTotal}`
+                              : 'Preparing package'}
+                          </div>
+                        </div>
+                        <div style={{ color: '#dce7ff', fontSize: 13 }}>
+                          {catalogExportStatusLabel(job)}
+                        </div>
+                        <div style={{ color: '#93a8cb', fontSize: 12, lineHeight: 1.45 }}>
+                          {job.progressMessage || 'Preparing package'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {readyCatalogExportJobs.length > 0 && (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#8fa2c5', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+                      Ready downloads
+                    </div>
+                    <div style={{ color: '#6f7d9d', fontSize: 12, lineHeight: 1.5 }}>
+                      Recent packages stay here until they expire, so customers can come back without wondering where the download went.
                     </div>
                   </div>
-                  <button
-                    onClick={() => void downloadExportArtifact(part.downloadUrl, part.fileName || part.partName)}
-                    style={{
-                      background: '#132945',
-                      border: '1px solid rgba(127,232,255,0.2)',
-                      borderRadius: 10,
-                      color: '#eff7ff',
-                      padding: '9px 14px',
-                      fontSize: 13,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Download {part.partName}
-                  </button>
+                  <div style={{
+                    borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    overflow: 'hidden',
+                    background: '#0f121b',
+                  }}>
+                    {readyCatalogExportJobs.map((job, index) => {
+                      const workspaceStem = makeSafeFilePart(job.workspaceId || 'workspace')
+                      const simpleItems: CatalogDownloadListItem[] = []
+                      if (job.manifestUrl) {
+                        simpleItems.push({
+                          key: `${job.exportId}-manifest`,
+                          label: 'Catalog manifest',
+                          typeLabel: 'Catalog CSV',
+                          sizeLabel: 'Included',
+                          actionLabel: 'Download',
+                          downloadUrl: job.manifestUrl,
+                          fileName: `${workspaceStem}-catalog.csv`,
+                        })
+                      }
+                      if (job.summaryUrl) {
+                        simpleItems.push({
+                          key: `${job.exportId}-summary`,
+                          label: 'Package summary',
+                          typeLabel: 'Summary JSON',
+                          sizeLabel: 'Included',
+                          actionLabel: 'Download',
+                          downloadUrl: job.summaryUrl,
+                          fileName: `${workspaceStem}-catalog-summary.json`,
+                        })
+                      }
+                      for (const part of job.parts || []) {
+                        simpleItems.push({
+                          key: `${job.exportId}-${part.partName}`,
+                          label: part.partName.replace(/\.zip$/i, ''),
+                          typeLabel: 'ZIP package',
+                          sizeLabel: part.sizeLabel || fmtBytes(part.sizeBytes),
+                          actionLabel: 'Download',
+                          downloadUrl: part.downloadUrl,
+                          fileName: part.fileName || part.partName,
+                        })
+                      }
+                      return (
+                        <div
+                          key={job.exportId}
+                          style={{
+                            padding: '14px',
+                            borderTop: index === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                            display: 'grid',
+                            gap: 12,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'grid', gap: 4 }}>
+                            <div style={{ color: '#e8f0ff', fontSize: 14, fontWeight: 600 }}>
+                              {catalogExportWorkspaceName(job.workspaceId)}
+                            </div>
+                            <div style={{ color: '#8fa2c5', fontSize: 12 }}>
+                              Ready · {job.partCount || 0} part{job.partCount === 1 ? '' : 's'} · {(job.totalBytesLabel || fmtBytes(job.totalBytes))}
+                            </div>
+                            <div style={{ color: '#6f7d9d', fontSize: 11 }}>
+                              Prepared {job.updatedAt || job.createdAt ? fmtDateTime(job.updatedAt || job.createdAt || '') : 'recently'}
+                            </div>
+                          </div>
+                          <div style={{ color: '#93a8cb', fontSize: 12 }}>
+                            Expires {job.expiresAt ? fmtDateTime(job.expiresAt) : '—'}
+                          </div>
+                          </div>
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {simpleItems.map((item) => (
+                              <div
+                                key={item.key}
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: isDesktopVaultShell ? 'minmax(220px, 2fr) minmax(120px, 1fr) minmax(100px, 1fr) auto' : '1fr',
+                                  gap: 12,
+                                  alignItems: 'center',
+                                  padding: '10px 12px',
+                                  borderRadius: 10,
+                                  background: 'rgba(255,255,255,0.02)',
+                                  border: '1px solid rgba(255,255,255,0.05)',
+                                }}
+                              >
+                                <div style={{ color: '#e5ebff', fontSize: 14, fontWeight: 600 }}>{item.label}</div>
+                                <div style={{ color: '#9fb1d3', fontSize: 12 }}>{item.typeLabel}</div>
+                                <div style={{ color: '#d6e2ff', fontSize: 12 }}>{item.sizeLabel}</div>
+                                <div style={{ display: 'flex', justifyContent: isDesktopVaultShell ? 'flex-end' : 'flex-start' }}>
+                                  <button
+                                    onClick={() => void downloadExportArtifact(item.downloadUrl, item.fileName)}
+                                    style={{
+                                      background: '#132945',
+                                      border: '1px solid rgba(127,232,255,0.2)',
+                                      borderRadius: 10,
+                                      color: '#eff7ff',
+                                      padding: '9px 14px',
+                                      fontSize: 13,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {item.actionLabel}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          {(readyCatalogExportJobs.length > 0 || catalogExport?.status === 'ready') && (
+            <div style={{ marginTop: 12, color: '#8392b1', fontSize: 12, lineHeight: 1.55 }}>
+              ZIP parts are safe to unzip into the same parent folder. Audio, image, and lyrics filenames are unique, and each manifest file is named per part so it does not overwrite the others.
             </div>
           )}
         </div>
       )}
 
-      {!publishEntitled && (
+      {showPlaceholderVaultSection && (
+        <div style={{
+          marginBottom: 22,
+          padding: '20px 22px',
+          borderRadius: 12,
+          border: '1px solid rgba(129,236,255,0.1)',
+          background: 'rgba(9, 12, 18, 0.92)',
+          display: 'grid',
+          gap: 10,
+        }}>
+          <div style={{ color: '#7fe8ff', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase' }}>
+            {vaultSectionMeta[vaultSection as Extract<VaultSection, 'security' | 'truth' | 'history'>]?.title || 'Vault lane'}
+          </div>
+          <div style={{ color: '#eef4ff', fontSize: 22, fontWeight: 600 }}>
+            {vaultSectionMeta[vaultSection as Extract<VaultSection, 'security' | 'truth' | 'history'>]?.title || 'Vault lane'}
+          </div>
+          <div style={{ color: '#93a8cb', fontSize: 14, lineHeight: 1.7, maxWidth: 820 }}>
+            {vaultSectionMeta[vaultSection as Extract<VaultSection, 'security' | 'truth' | 'history'>]?.body}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setVaultSection('archives')}
+              style={{
+                background: '#132945',
+                border: '1px solid rgba(127,232,255,0.2)',
+                borderRadius: 10,
+                color: '#eff7ff',
+                padding: '9px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Back to Archive
+            </button>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Sundrop ${vaultSectionMeta[vaultSection as Extract<VaultSection, 'security' | 'truth' | 'history'>]?.title || 'Vault'} follow-up`)}`}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 10,
+                color: '#c9d7f0',
+                padding: '9px 14px',
+                fontSize: 13,
+                textDecoration: 'none',
+              }}
+            >
+              Contact support
+            </a>
+          </div>
+        </div>
+      )}
+
+      {showArchiveHome && !publishEntitled && (
         <div style={{
           marginBottom: 18,
           padding: '12px 14px',
@@ -3869,7 +4709,7 @@ export default function VaultGrid() {
         </div>
       )}
 
-      {showQueueInspector && (
+      {showArchiveHome && showQueueInspector && (
         <div style={{
           marginBottom: 22,
           border: '1px solid #2a2a4a',
@@ -4406,79 +5246,9 @@ export default function VaultGrid() {
         </div>
       )}
 
-      {paged.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#444', padding: 60, fontSize: 16 }}>
-          No tracks found.
-        </div>
-      ) : viewMode === 'catalog' ? (
-        <div style={{
-          marginBottom: 28,
-          border: '1px solid rgba(129,236,255,0.08)',
-          background: 'linear-gradient(180deg, rgba(12,14,18,0.96), rgba(8,8,10,0.98))',
-          overflowX: 'auto',
-        }}>
-          <div style={{
-            minWidth: 1080,
-          }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '72px minmax(260px, 1.4fr) minmax(120px, 0.7fr) minmax(180px, 0.95fr) minmax(280px, 1.25fr)',
-              gap: 18,
-              padding: '14px 18px',
-              borderBottom: '1px solid rgba(129,236,255,0.08)',
-              color: '#66708b',
-              fontSize: 11,
-              letterSpacing: '.22em',
-              textTransform: 'uppercase',
-            }}>
-              <div>Cover</div>
-              <div>Asset Identity</div>
-              <div>Creator</div>
-              <div>State</div>
-              <div style={{ textAlign: 'right' }}>Catalog Actions</div>
-            </div>
-            <div>
-              {paged.map(song => (
-                <CatalogRow
-                  key={song.songKey}
-                  song={song}
-                  selected={Boolean(selected[song.songKey])}
-                  onToggleSelected={toggleSelected}
-                  onQueueForYouTube={queueForYouTube}
-                  ytState={ytStatus[song.songKey]}
-                  publishAccess={publishAccess}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: desktopInteractiveGrid
-            ? 'repeat(auto-fill, minmax(250px, 1fr))'
-            : 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: 16, marginBottom: 32,
-        }}>
-          {paged.map(s => (
-            <SongCard
-              key={s.songKey}
-              song={s}
-              accountDisplay={canonicalAccount(s)}
-              ytState={ytStatus[s.songKey]}
-              onQueueForYouTube={queueForYouTube}
-              selected={Boolean(selected[s.songKey])}
-              onToggleSelected={toggleSelected}
-              publishAccess={publishAccess}
-              isFocused={desktopInteractiveGrid && focusedSongKey === s.songKey}
-              onFocusCard={setFocusedSongKey}
-              desktopInteractive={desktopInteractiveGrid}
-            />
-          ))}
-        </div>
-      )}
+      {showArchiveHome && archiveBody}
 
-      {paged.length > 0 && (
+      {showArchiveHome && paged.length > 0 && (
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',

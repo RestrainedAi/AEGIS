@@ -31,7 +31,8 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
   const [sunoProfileUrl, setSunoProfileUrl] = useState('')
   const [youtubeChannelUrl, setYoutubeChannelUrl] = useState('')
   const [intendedUse, setIntendedUse] = useState('')
-  const [preferredUpgradePlanId, setPreferredUpgradePlanId] = useState('creator_monthly')
+  const [requestedTierId, setRequestedTierId] = useState(preferredTierId || 'creator')
+  const [preferredUpgradePlanId, setPreferredUpgradePlanId] = useState('creator-monthly')
 
   useEffect(() => {
     if (!session?.accessRequest) return
@@ -41,23 +42,21 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
     setSunoProfileUrl(session.accessRequest.sunoProfileUrl || '')
     setYoutubeChannelUrl(session.accessRequest.youtubeChannelUrl || '')
     setIntendedUse(session.accessRequest.intendedUse || '')
-    setPreferredUpgradePlanId(session.accessRequest.preferredUpgradePlanId || 'creator_monthly')
+    setRequestedTierId(session.accessRequest.requestedTier || preferredTierId || 'creator')
+    setPreferredUpgradePlanId(session.accessRequest.preferredUpgradePlanId || 'creator-monthly')
   }, [session?.accessRequest])
 
   useEffect(() => {
     if (!preferredTierId || session?.accessRequest?.status === 'pending') return
     const preferredTier = signupCatalogById[preferredTierId]
     if (!preferredTier) return
-    if (preferredTier.id === 'creator_monthly' || preferredTier.id === 'studio_monthly') {
-      setPreferredUpgradePlanId(preferredTier.id)
-    }
+    setRequestedTierId(preferredTier.id)
+    if (preferredTier.defaultPlanId) setPreferredUpgradePlanId(preferredTier.defaultPlanId)
   }, [preferredTierId, session?.accessRequest?.status])
 
-  const betaTier = signupCatalogById.beta
-  const upgradeOptions = useMemo(
-    () => signupCatalog.filter((tier) => tier.id === 'creator_monthly' || tier.id === 'studio_monthly'),
-    []
-  )
+  const requestedTier = signupCatalogById[requestedTierId] || signupCatalogById.creator
+  const publicTierOptions = useMemo(() => signupCatalog.filter((tier) => tier.publicBetaVisible), [])
+  const migrationOptions = useMemo(() => signupCatalog.filter((tier) => tier.id !== 'artist'), [])
 
   const identityLabel =
     session?.user?.displayName ||
@@ -157,13 +156,13 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           requestKind: 'beta',
-          requestedTier: 'beta',
+          requestedTier: requestedTierId,
           requestedWorkspaceName: requestedWorkspaceName.trim(),
           sunoHandle: sunoHandle.trim(),
           sunoProfileUrl: sunoProfileUrl.trim(),
           youtubeChannelUrl: youtubeChannelUrl.trim(),
           intendedUse: intendedUse.trim(),
-          preferredUpgradePlanId: preferredUpgradePlanId.trim(),
+          preferredUpgradePlanId: preferredUpgradePlanId.trim() || requestedTier?.defaultPlanId || 'creator-monthly',
           note: approvalNote.trim(),
         }),
       })
@@ -561,15 +560,38 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
             </label>
 
             <label style={signupFieldLabelStyle}>
-              Preferred paid path after beta
+              Requested lane
+              <select
+                style={inputStyle}
+                value={requestedTierId}
+                onChange={(event) => {
+                  const nextTierId = event.target.value
+                  setRequestedTierId(nextTierId)
+                  const nextTier = signupCatalogById[nextTierId]
+                  if (nextTier?.defaultPlanId) {
+                    setPreferredUpgradePlanId(nextTier.defaultPlanId)
+                  }
+                }}
+                disabled={working}
+              >
+                {publicTierOptions.map((tier) => (
+                  <option key={tier.id} value={tier.id}>
+                    {tier.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={signupFieldLabelStyle}>
+              Post-beta paid path
               <select
                 style={inputStyle}
                 value={preferredUpgradePlanId}
                 onChange={(event) => setPreferredUpgradePlanId(event.target.value)}
                 disabled={working}
               >
-                {upgradeOptions.map((tier) => (
-                  <option key={tier.id} value={tier.id}>
+                {migrationOptions.map((tier) => (
+                  <option key={tier.defaultPlanId} value={tier.defaultPlanId}>
                     {tier.label}
                   </option>
                 ))}
@@ -760,8 +782,8 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
           {accessRequestStatus === 'pending' && (
             <>
               <div style={tierPreviewStyle}>
-                <strong>Beta application in review</strong>
-                <span>{betaTier?.summary || 'Approval is pending for the beta program.'}</span>
+              <strong>{requestedTier?.label || 'Requested lane'} application in review</strong>
+              <span>{requestedTier?.summary || 'Approval is pending for the beta program.'}</span>
               </div>
               {!!session?.accessRequest?.betaExpiresAt && (
                 <div style={tierPreviewStyle}>
@@ -823,14 +845,21 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
               </label>
 
               <label style={fieldLabelStyle}>
-                Preferred paid path after beta
+                Requested lane
                 <select
                   style={inputStyle}
-                  value={preferredUpgradePlanId}
-                  onChange={(event) => setPreferredUpgradePlanId(event.target.value)}
+                  value={requestedTierId}
+                  onChange={(event) => {
+                    const nextTierId = event.target.value
+                    setRequestedTierId(nextTierId)
+                    const nextTier = signupCatalogById[nextTierId]
+                    if (nextTier?.defaultPlanId) {
+                      setPreferredUpgradePlanId(nextTier.defaultPlanId)
+                    }
+                  }}
                   disabled={working}
                 >
-                  {upgradeOptions.map((tier) => (
+                  {publicTierOptions.map((tier) => (
                     <option key={tier.id} value={tier.id}>
                       {tier.label}
                     </option>
@@ -838,9 +867,25 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
                 </select>
               </label>
 
+              <label style={fieldLabelStyle}>
+                Post-beta paid path
+                <select
+                  style={inputStyle}
+                  value={preferredUpgradePlanId}
+                  onChange={(event) => setPreferredUpgradePlanId(event.target.value)}
+                  disabled={working}
+                >
+                  {migrationOptions.map((tier) => (
+                    <option key={tier.defaultPlanId} value={tier.defaultPlanId}>
+                      {tier.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <div style={tierPreviewStyle}>
-                <strong>{betaTier?.label || 'Beta Tester'}</strong>
-                <span>{betaTier?.summary || 'Manual review will place this into the beta program.'}</span>
+                <strong>{requestedTier?.label || 'Requested lane'}</strong>
+                <span>{requestedTier?.summary || 'Manual review will place this request into the correct lane.'}</span>
               </div>
               <textarea
                 style={textareaStyle}

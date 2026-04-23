@@ -1,136 +1,22 @@
 import type { SignupTierOption } from '../types'
+import tierCatalogConfig from '../../shared/tierCatalog.json'
 
-export const signupCatalog: SignupTierOption[] = [
-  {
-    id: 'beta',
-    lane: 'beta',
-    label: 'Beta Tester',
-    priceLabel: '$0 during beta',
-    cadence: 'approval',
-    summary: 'Early access for testers helping shape the Vault, workflows, and publishing tools.',
-    highlights: [
-      'Vault access during beta',
-      'Feedback-driven product shaping',
-      'Manual approval from the control center',
-    ],
-    defaultRole: 'viewer',
-    defaultPlanId: 'beta',
-    trialDays: 0,
-    billingCadences: ['approval'],
-    entitlements: {
-      'vault.browse': true,
-      'vault.search.advanced': true,
-      'catalog.export.local': true,
-      'lyrics.artifacts': true,
-      'styles.normalized': true,
-      'youtube.publish.enabled': true,
-      'admin.reports': false,
-    },
-    limits: {
-      sourcesMax: 3,
-      storageGbIncluded: 10,
-      membersMax: 1,
-      youtubePublishMonthlyLimit: 25,
-    },
-  },
-  {
-    id: 'free',
-    lane: 'free',
-    label: 'Explorer Free',
-    priceLabel: '$0',
-    cadence: 'ongoing',
-    summary: 'A light personal lane for preservation, discovery, and learning the system.',
-    highlights: [
-      'Personal workspace',
-      'Starter storage and source limits',
-      'Upgrade path into creator tiers',
-    ],
-    defaultRole: 'viewer',
-    defaultPlanId: 'free',
-    trialDays: 0,
-    billingCadences: ['ongoing'],
-    entitlements: {
-      'vault.browse': true,
-      'vault.search.advanced': false,
-      'catalog.export.local': true,
-      'lyrics.artifacts': true,
-      'styles.normalized': true,
-      'youtube.publish.enabled': false,
-      'admin.reports': false,
-    },
-    limits: {
-      sourcesMax: 1,
-      storageGbIncluded: 5,
-      membersMax: 1,
-      youtubePublishMonthlyLimit: 0,
-    },
-  },
-  {
-    id: 'creator_monthly',
-    lane: 'paid',
-    label: 'Creator Monthly',
-    priceLabel: '$29 / month',
-    cadence: 'monthly',
-    summary: 'The main working tier for active cataloging, publishing, and preservation workflows.',
-    highlights: [
-      'Dedicated workspace',
-      'Higher workflow limits',
-      'Publishing-ready feature set',
-    ],
-    defaultRole: 'editor',
-    defaultPlanId: 'creator-monthly',
-    trialDays: 14,
-    billingCadences: ['monthly', 'quarterly', 'annual'],
-    entitlements: {
-      'vault.browse': true,
-      'vault.search.advanced': true,
-      'catalog.export.local': true,
-      'lyrics.artifacts': true,
-      'styles.normalized': true,
-      'youtube.publish.enabled': true,
-      'admin.reports': false,
-    },
-    limits: {
-      sourcesMax: 10,
-      storageGbIncluded: 50,
-      membersMax: 2,
-      youtubePublishMonthlyLimit: 150,
-    },
-  },
-  {
-    id: 'studio_monthly',
-    lane: 'paid',
-    label: 'Studio Monthly',
-    priceLabel: '$99 / month',
-    cadence: 'monthly',
-    summary: 'A team-oriented lane for shared workspaces, oversight, and heavier usage.',
-    highlights: [
-      'Shared workspace support',
-      'Admin-grade controls',
-      'Higher operational limits',
-    ],
-    defaultRole: 'admin',
-    defaultPlanId: 'studio-monthly',
-    trialDays: 14,
-    billingCadences: ['monthly', 'quarterly', 'annual'],
-    entitlements: {
-      'vault.browse': true,
-      'vault.search.advanced': true,
-      'catalog.export.local': true,
-      'lyrics.artifacts': true,
-      'styles.normalized': true,
-      'youtube.publish.enabled': true,
-      'admin.reports': true,
-    },
-    limits: {
-      sourcesMax: 30,
-      storageGbIncluded: 200,
-      membersMax: 8,
-      youtubePublishMonthlyLimit: 600,
-    },
-  },
-]
+type TierCatalogShape = {
+  tiers?: SignupTierOption[]
+}
+
+export const signupCatalog: SignupTierOption[] = ((tierCatalogConfig as TierCatalogShape).tiers || []).map((tier) => ({
+  ...tier,
+})) as SignupTierOption[]
 
 export const signupCatalogById = Object.fromEntries(
   signupCatalog.map((tier) => [tier.id, tier] as const)
 )
+
+export const publicBetaTierIds = signupCatalog
+  .filter((tier) => tier.publicBetaVisible)
+  .map((tier) => tier.id)
+
+export const betaMigrationTierIds = signupCatalog
+  .filter((tier) => tier.id !== 'artist')
+  .map((tier) => tier.id)

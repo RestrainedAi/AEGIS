@@ -31,6 +31,7 @@ yt-ingest/pipeline_monitor_status.json
 yt-ingest/.harvest-job.env.yaml
 latest_catalog_wide.csv
 latest_catalog_wide.meta.json
+data/exports/
 
 # Local backup / duplicate files
 *(1).*

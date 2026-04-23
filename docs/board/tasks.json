@@ -460,13 +460,13 @@
   {
     "id": "AEGIS-015",
     "title": "Add post-deploy smoke validation for Vault runtime integrity",
-    "status": "Backlog",
+    "status": "In Progress",
     "priority": "P1",
     "size": "M",
     "owner": "Platform",
     "stream": "Reliability",
     "summary": "Define and run minimum live checks after deploy so the Vault is not treated as healthy until catalog, lyrics, styles, auth, and publish gating still work.",
-    "notes": "This ticket closes the gap between deploy success and product reality by requiring a small set of live runtime checks after releases that touch viewer, export, auth, or queue-adjacent surfaces.",
+    "notes": "Moved to In Progress on 2026-04-23. The recent viewer/download revisions are now being sanity-checked live against the real Vault surface instead of being treated as healthy on deploy alone: thumbnails were re-verified after the Sovereign Catalog fix, lower-shell placeholder routes were checked, empty/non-exportable Downloads states were verified to fail honestly, and single-workspace Downloads no longer shows a useless workspace picker. The next step is to formalize this into a repeatable post-deploy checklist so export, auth, and Vault UX changes always prove themselves against the live product before the lane is called stable.",
     "sources": [
       "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
     ]
@@ -474,13 +474,13 @@
   {
     "id": "AEGIS-016",
     "title": "Split daily health reporting into subsystem health",
-    "status": "Backlog",
+    "status": "In Progress",
     "priority": "P1",
     "size": "M",
     "owner": "Platform + Ops",
     "stream": "Reliability",
     "summary": "Separate harvest, export contract, viewer, queue, caption, and auth/admin health so one green pipeline email does not mask a degraded product surface.",
-    "notes": "The goal is to stop treating a single pipeline-healthy signal as sufficient when the live Vault feed or admin surfaces can still be degraded.",
+    "notes": "Moved to In Progress on 2026-04-23. Yesterday's harvested logs now show a clearer subsystem picture than the earlier all-green summaries: the run logged repeated 403 media fetch errors and async cleanup noise, but it also rebuilt 1915 catalog rows, uploaded the canonical latest_catalog_wide.csv plus metadata, and the post-harvest monitor reported summary status=healthy with catalog_age_hours=0.0. That is the right direction, but the reporting still needs to separate harvest/media retrieval noise from catalog publish freshness and live Vault health so one 'healthy' line cannot hide a degraded user-facing surface again.",
     "sources": [
       "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
     ]
@@ -763,7 +763,7 @@
     "owner": "Engineering",
     "stream": "Downloader",
     "summary": "Ship the first local-catalog export flow with manifest CSV packaging, asset bundling, and automatic multi-zip sharding for larger catalogs.",
-    "notes": "Moved to In Progress on 2026-04-15. A first working Tier 1 local export path now exists in suno-viewer: authenticated users with `catalog.export.local` can prepare a local catalog package, download a manifest CSV, and fetch one or more ZIP parts built from workspace-scoped audio, lyrics, and image assets. Sharding now targets a practical max part size instead of one giant archive so larger catalogs can split cleanly across multiple downloads. Remaining work should harden long-running export durability, refine tier gating, and add operator/customer-friendly export history and recovery UX.",
+    "notes": "Moved to In Progress on 2026-04-15. A first working Tier 1 local export path now exists in suno-viewer: authenticated users with `catalog.export.local` can prepare a local catalog package, download a manifest CSV, and fetch one or more ZIP parts built from workspace-scoped audio, lyrics, and image assets. Sharding now targets a practical max part size instead of one giant archive so larger catalogs can split cleanly across multiple downloads. The 2026-04-18 through 2026-04-23 UX passes added an active queue/readiness model via `/api/catalog-exports`, simple ready-download rows with type/size/download actions, phase+step messaging for active packages, ready-state notifications, a first-class Downloads shell destination, short song-key-based asset filenames, unique per-part manifest names to avoid Windows unzip/copy conflicts, cleaner empty/error handling for non-exportable workspaces, calmer failure copy with direct support actions, removal of fake zero-byte success metrics, and removal of the one-option workspace picker in the single-workspace case. Remaining work should harden long-running export durability, add clearer request flows for single-song/selection/catalog packaging, and turn Downloads into a more persistent customer history center.",
     "sources": [
       "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
       "../codex/SUNO_Downloader_Competitive_Capability_Gap_Analysis.md"

@@ -34,7 +34,7 @@ ENV WORK_DIR=/app
 ENV PROJECT=stable-framing-482501-t9
 ENV SUNO_MEDIA_BUCKET=gs://aeonimus-suno-media
 ENV WORKSPACES_BUCKET=gs://aeonimus-workspaces
-ENV HARVEST_HANDLE=genxdreams
+ENV HARVEST_HANDLE=vanessa_primary
 ENV HARVEST_MODE=delta
 
 CMD ["/app/entrypoint.sh"]

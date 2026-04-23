@@ -71,7 +71,7 @@ required = {
     "WORK_DIR": "/app",
     "SUNO_MEDIA_BUCKET": "gs://aeonimus-suno-media",
     "WORKSPACES_BUCKET": "gs://aeonimus-workspaces",
-    "HARVEST_HANDLE": "genxdreams",
+    "HARVEST_HANDLE": "vanessa_primary",
     "HARVEST_MODE": "delta",
 }
 service_account = tmpl.get("serviceAccountName")
@@ -222,7 +222,7 @@ PROJECT: "${PROJECT}"
 WORK_DIR: "/app"
 SUNO_MEDIA_BUCKET: "gs://aeonimus-suno-media"
 WORKSPACES_BUCKET: "gs://aeonimus-workspaces"
-HARVEST_HANDLE: "genxdreams"
+HARVEST_HANDLE: "vanessa_primary"
 HARVEST_MODE: "delta"
 YAML
 

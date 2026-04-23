@@ -24,6 +24,8 @@ LOG_DIR="${WORK_DIR}/logs"
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 LOG_FILE="${LOG_DIR}/daily_suno_job_${TIMESTAMP}.log"
 PROJECT="stable-framing-482501-t9"
+CATALOG_EXPORT_GCS="gs://aeonimus-workspaces/exports/suno/latest_catalog_wide.csv"
+CATALOG_EXPORT_META_GCS="gs://aeonimus-workspaces/exports/suno/latest_catalog_wide.meta.json"
  
 # ── Setup ─────────────────────────────────────────────────────────────────────
 mkdir -p "${LOG_DIR}"
@@ -133,6 +135,69 @@ if [ "${REBUILD_EXIT}" -ne 0 ]; then
     echo "[ERROR] rebuild_catalog.py exited with code ${REBUILD_EXIT}"
     echo "        Recovery: rerun python3 ${REBUILD_SCRIPT} after resolving the export failure."
     exit "${REBUILD_EXIT}"
+fi
+
+# ── Step 4b: Verify published freshness contract ─────────────────────────────
+echo ""
+echo "[STEP 4b] Verifying published catalog freshness..."
+LOCAL_META="${WORK_DIR}/latest_catalog_wide.meta.json"
+if [ ! -f "${LOCAL_META}" ]; then
+    echo "[ERROR] Local export metadata missing after rebuild: ${LOCAL_META}"
+    exit 1
+fi
+
+GCS_META_JSON="$(gcloud storage cat "${CATALOG_EXPORT_META_GCS}" 2>/dev/null || true)"
+if [ -z "${GCS_META_JSON}" ]; then
+    echo "[ERROR] Could not read published catalog metadata from ${CATALOG_EXPORT_META_GCS}"
+    exit 1
+fi
+
+python3 - <<PY
+import json
+import sys
+from pathlib import Path
+
+local_meta = json.loads(Path(r"${LOCAL_META}").read_text(encoding="utf-8"))
+gcs_meta = json.loads("""${GCS_META_JSON}""")
+
+errors = []
+
+expected_artifact = "${CATALOG_EXPORT_GCS}"
+if local_meta.get("artifact") != expected_artifact:
+    errors.append(
+        f"Local metadata artifact mismatch: {local_meta.get('artifact')} != {expected_artifact}"
+    )
+if gcs_meta.get("artifact") != expected_artifact:
+    errors.append(
+        f"Published metadata artifact mismatch: {gcs_meta.get('artifact')} != {expected_artifact}"
+    )
+if local_meta.get("generatedAt") != gcs_meta.get("generatedAt"):
+    errors.append(
+        f"generatedAt mismatch local={local_meta.get('generatedAt')} gcs={gcs_meta.get('generatedAt')}"
+    )
+if int(local_meta.get("rowCount") or 0) <= 0:
+    errors.append(f"Local rowCount is not positive: {local_meta.get('rowCount')}")
+if int(gcs_meta.get("rowCount") or 0) <= 0:
+    errors.append(f"Published rowCount is not positive: {gcs_meta.get('rowCount')}")
+if int(local_meta.get("rowCount") or 0) != int(gcs_meta.get("rowCount") or 0):
+    errors.append(
+        f"rowCount mismatch local={local_meta.get('rowCount')} gcs={gcs_meta.get('rowCount')}"
+    )
+
+if errors:
+    print("[ERROR] Catalog freshness verification failed:")
+    for item in errors:
+        print(f"  - {item}")
+    sys.exit(1)
+
+print("  Published catalog metadata matches local rebuild output.")
+print(f"  generatedAt: {gcs_meta.get('generatedAt')}")
+print(f"  rowCount:    {gcs_meta.get('rowCount')}")
+print(f"  artifact:    {gcs_meta.get('artifact')}")
+PY
+VERIFY_EXIT=$?
+if [ "${VERIFY_EXIT}" -ne 0 ]; then
+    exit "${VERIFY_EXIT}"
 fi
 
 # ── Step 5: Summary ───────────────────────────────────────────────────────────

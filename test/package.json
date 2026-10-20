@@ -1,0 +1,23 @@
+{
+  "name": "aegis-test-suite",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AEGIS sequential feature test orchestrator",
+  "scripts": {
+    "test": "node run-all.mjs --phase pre-deploy",
+    "test:all": "node run-all.mjs --phase all",
+    "test:pre-deploy": "node run-all.mjs --phase pre-deploy",
+    "test:post-deploy": "node run-all.mjs --phase post-deploy",
+    "test:feature": "node runners/run-feature-suite.mjs",
+    "test:harvest": "node runners/run-feature-suite.mjs harvest-freshness",
+    "test:vault": "node runners/run-feature-suite.mjs vault-search-browse",
+    "test:export": "node runners/run-feature-suite.mjs downloads-export",
+    "test:multi-account": "node runners/run-feature-suite.mjs multi-account-harvest",
+    "test:auth-domain": "node runners/run-feature-suite.mjs auth-domain",
+    "test:youtube": "node runners/run-feature-suite.mjs youtube-bridge",
+    "test:auth-signup": "node runners/run-feature-suite.mjs auth-signup-tier",
+    "test:admin": "node runners/run-feature-suite.mjs admin-control-center",
+    "test:regression": "node runners/run-feature-suite.mjs cross-module-regression"
+  }
+}

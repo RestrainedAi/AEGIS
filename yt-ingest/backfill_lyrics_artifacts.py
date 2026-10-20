@@ -16,10 +16,14 @@ authoritative timing truth from SUNO.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
+import uuid
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from typing import Any
 
 from gcp_access_token import get_access_token
 
@@ -90,7 +94,7 @@ def fetch_all_docs(limit: int = 0) -> list[dict]:
 def upload_bytes(content: bytes, object_name: str, content_type: str) -> str:
     url = (
         f"https://storage.googleapis.com/upload/storage/v1/b/{BUCKET}/o"
-        f"?uploadType=media&name={urllib.parse.quote(object_name, safe='')}"
+        f"?uploadType=media&ifGenerationMatch=0&name={urllib.parse.quote(object_name, safe='')}"
     )
     req = urllib.request.Request(
         url,
@@ -102,8 +106,36 @@ def upload_bytes(content: bytes, object_name: str, content_type: str) -> str:
         },
     )
     with urllib.request.urlopen(req, timeout=60) as response:
-        response.read()
+        stored = json.loads(response.read())
+    if int(stored.get("size", -1)) != len(content) or stored.get("md5Hash") != base64.b64encode(hashlib.md5(content).digest()).decode():
+        raise ValueError("Lyrics artifact upload failed checksum verification")
     return f"{PUBLIC_BASE}/{object_name}"
+
+
+def artifact_inventory() -> dict[str, dict]:
+    objects = {}
+    page = ""
+    while True:
+        url = (f"https://storage.googleapis.com/storage/v1/b/{BUCKET}/o"
+               "?prefix=exports/suno/&maxResults=1000&fields=items(name,size,md5Hash),nextPageToken")
+        if page:
+            url += "&pageToken=" + urllib.parse.quote(page, safe="")
+        req = urllib.request.Request(url, headers=headers())
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.load(response)
+        for item in data.get("items", []):
+            objects[f"{PUBLIC_BASE}/{item['name']}"] = item
+        page = data.get("nextPageToken")
+        if not page:
+            return objects
+
+
+def artifacts_current(fields: dict, text: str, objects: dict) -> bool:
+    urls = [normalize_text(fval(fields.get(key))) for key in ("gcsLyricsTxt", "gcsLyricsJson", "gcsLyricsVtt")]
+    urls = [url.replace(f"gs://{BUCKET}/", f"{PUBLIC_BASE}/") for url in urls]
+    if not all(int(objects.get(url, {}).get("size", 0)) > 0 for url in urls):
+        return False
+    return objects[urls[0]].get("md5Hash") == base64.b64encode(hashlib.md5(text.encode("utf-8")).digest()).decode()
 
 
 def patch_doc(doc_name: str, patch_fields: dict[str, dict]) -> None:
@@ -214,29 +246,60 @@ def build_vtt_payload(fields: dict) -> bytes:
     return ("\n".join(notes + cues)).encode("utf-8")
 
 
+def matches_filters(fields: dict[str, Any], source_id_filter: str = "", handle_filter: str = "") -> bool:
+    source_id = fval(fields.get("sourceId")) or ""
+    handle = fval(fields.get("handle")) or ""
+    if source_id_filter and source_id != source_id_filter:
+        return False
+    if handle_filter and handle != handle_filter:
+        return False
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=0, help="Optional cap on documents to inspect")
     parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+    parser.add_argument("--source-id", default="", help="Only process docs with this Firestore sourceId.")
+    parser.add_argument("--handle", default="", help="Only process docs with this Firestore handle.")
+    parser.add_argument(
+        "--missing-only",
+        action="store_true",
+        help="Only write artifacts for docs missing one or more lyrics artifact URLs.",
+    )
     args = parser.parse_args()
 
     docs = fetch_all_docs(limit=args.limit)
+    objects = artifact_inventory() if args.missing_only else {}
+    run_id = uuid.uuid4().hex
     touched = 0
     skipped = 0
+    failed = []
 
     for doc in docs:
         doc_name = doc.get("name", "")
         song_key = doc_name.split("/")[-1]
         fields = doc.get("fields", {}) or {}
+        if not matches_filters(fields, source_id_filter=args.source_id, handle_filter=args.handle):
+            skipped += 1
+            continue
         lyrics = normalize_text(fval(fields.get("lyrics")))
         if not lyrics:
             skipped += 1
             continue
 
+        existing_txt = normalize_text(fval(fields.get("gcsLyricsTxt")))
+        existing_json = normalize_text(fval(fields.get("gcsLyricsJson")))
+        existing_vtt = normalize_text(fval(fields.get("gcsLyricsVtt")))
+        if args.missing_only and artifacts_current(fields, lyrics, objects):
+            skipped += 1
+            continue
+
         title = fval(fields.get("title"))
-        txt_object = f"{GCS_PREFIX}/{song_key}/lyrics.txt"
-        json_object = f"{GCS_PREFIX}/{song_key}/lyrics.json"
-        vtt_object = f"{GCS_PREFIX}/{song_key}/lyrics.vtt"
+        # New versions preserve the old artifacts until all replacements verify.
+        txt_object = f"{GCS_PREFIX}/{song_key}/versions/{run_id}/lyrics.txt"
+        json_object = f"{GCS_PREFIX}/{song_key}/versions/{run_id}/lyrics.json"
+        vtt_object = f"{GCS_PREFIX}/{song_key}/versions/{run_id}/lyrics.vtt"
         txt_url = f"{PUBLIC_BASE}/{txt_object}"
         json_url = f"{PUBLIC_BASE}/{json_object}"
         vtt_url = f"{PUBLIC_BASE}/{vtt_object}"
@@ -251,18 +314,27 @@ def main() -> int:
         if args.dry_run:
             print(f"[DRY] {song_key} -> txt={txt_url} json={json_url} vtt={vtt_url} title={title!r}")
         else:
-            upload_bytes(lyrics.encode("utf-8"), txt_object, "text/plain; charset=utf-8")
-            upload_bytes(build_json_payload(song_key, fields), json_object, "application/json; charset=utf-8")
-            upload_bytes(build_vtt_payload(fields), vtt_object, "text/vtt; charset=utf-8")
-            patch_doc(doc_name, patch_fields)
-            print(f"[OK] {song_key} -> lyrics artifacts written")
+            try:
+                upload_bytes(lyrics.encode("utf-8"), txt_object, "text/plain; charset=utf-8")
+                upload_bytes(build_json_payload(song_key, fields), json_object, "application/json; charset=utf-8")
+                upload_bytes(build_vtt_payload(fields), vtt_object, "text/vtt; charset=utf-8")
+                patch_doc(doc_name, patch_fields)
+                print(f"[OK] {song_key} -> lyrics artifacts written and verified")
+            except Exception as exc:
+                failed.append({"songKey": song_key, "error": str(exc)})
+                print(f"[WARN] {song_key}: {exc}; continuing other songs")
+                continue
         touched += 1
 
     print("\n=== Summary ===")
     print(f"  scanned  : {len(docs)}")
     print(f"  touched  : {touched}")
     print(f"  skipped  : {skipped}")
-    return 0
+    print(f"  failed   : {len(failed)}")
+    if not args.dry_run:
+        report = {"generatedAt": now_iso(), "scanned": len(docs), "touched": touched, "skipped": skipped, "failures": failed}
+        upload_bytes(json.dumps(report, indent=2).encode(), f"exports/suno/recovery/lyrics/{run_id}.json", "application/json")
+    return 2 if failed else 0
 
 
 if __name__ == "__main__":

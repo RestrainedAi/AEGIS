@@ -30,6 +30,9 @@ export interface SunoSong {
   commentsCount: string
   remixCount: string
   audio_url: string
+  audio_asset_role?: string
+  audio_provenance_url?: string
+  audio_original_url?: string
   video_url: string
   image_url: string
   gcs_mp3: string
@@ -215,6 +218,28 @@ export interface AdminOverview {
     generator?: string
     artifact?: string
   }
+  exportFreshness: {
+    status: 'healthy' | 'stale' | 'mismatch' | 'unavailable' | 'source_ahead' | 'source_idle'
+    label: string
+    detail: string
+    generatedAt?: string
+    hoursSinceGeneratedAt: number | null
+    staleHours: number
+    servingSource: 'gcs' | 'fallback' | 'unavailable'
+    exportRowCount: number
+    servedRowCount: number
+    newestServedCreatedAt?: string
+    latestSourceCreatedAt?: string
+    sourceContentAgeHours: number | null
+    sourceLeadHours: number | null
+  }
+  latestSourceSong?: {
+    songKey: string
+    title: string
+    createdAt: string
+    status: string
+    accountHandle: string
+  } | null
   catalogHealth: {
     requiredColumns: string[]
     servingSource: 'gcs' | 'fallback' | 'unavailable'

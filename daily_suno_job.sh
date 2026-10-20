@@ -71,9 +71,11 @@ fi
 # Count data rows (exclude header)
 DELTA_ROWS=$(tail -n +2 "${DELTA_MANIFEST}" | grep -c '[^[:space:]]' || true)
 echo "  Delta rows: ${DELTA_ROWS}"
- 
+
+SKIP_MEDIA_HARVEST=0
 if [ "${DELTA_ROWS}" -eq 0 ]; then
-    echo "  Pipeline is fully in sync. No downloads needed."
+    echo "  Pipeline delta is fully in sync. Skipping media downloads, but continuing with export rebuild so the published catalog stays aligned with Firestore."
+    SKIP_MEDIA_HARVEST=1
 else
     # ── Step 3: Stream delta clips to GCS ────────────────────────────────────────
     echo ""
@@ -120,6 +122,11 @@ else
             exit "${DOWNLOAD_EXIT}"
         fi
     fi
+fi
+
+if [ "${SKIP_MEDIA_HARVEST}" -eq 1 ]; then
+    echo ""
+    echo "[STEP 3] Media download step skipped because there were no delta rows."
 fi
 
 # ── Step 4: Rebuild viewer catalog export ─────────────────────────────────────

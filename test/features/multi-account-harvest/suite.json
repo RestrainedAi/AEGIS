@@ -1,0 +1,96 @@
+{
+  "featureId": "multi-account-harvest",
+  "title": "Multi-Account SUNO Harvest (@nessihenize / vanessa_secondary)",
+  "module": "yt-ingest",
+  "deployPhase": "pre-deploy",
+  "scopeTicket": "multi-account harvest onboarding",
+  "wireframeRef": "test/features/multi-account-harvest/MASTER.md",
+  "steps": [
+    {
+      "id": "MA-01",
+      "title": "Handle filter unit coverage (nessihenize scoped harvest)",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python -m unittest test_catalog_sync_sources.py -v",
+      "onFail": {
+        "suggestions": [
+          "Ensure filter_tracked_handles() supports HARVEST_HANDLES / --handles"
+        ]
+      }
+    },
+    {
+      "id": "MA-02",
+      "title": "Live SUNO profile clip discovery for @nessihenize",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python -c \"from build_manifest_from_studio_api import fetch_profile_clip_ids; ids=fetch_profile_clip_ids('nessihenize'); assert len(ids)>0, 'expected clips for nessihenize'; print('clip_count=', len(ids))\"",
+      "onFail": {
+        "suggestions": [
+          "Verify https://suno.com/@nessihenize is public and Studio API pagination params are present",
+          "Check build_manifest_from_studio_api.fetch_profile_clip_ids()"
+        ]
+      }
+    },
+    {
+      "id": "MA-03",
+      "title": "Firestore source doc suno_nessihenize is active + harvestEnabled",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": ".",
+      "command": "python test/scripts/verify_firestore_source.py suno_nessihenize",
+      "requiresGcp": true,
+      "onFail": {
+        "suggestions": [
+          "Run yt-ingest/add_source_nessihenize.py after gcloud auth",
+          "Confirm sources/suno_nessihenize has harvestEnabled=true and workspaceId=studio-unshakableechos2341"
+        ],
+        "fixCommands": [
+          "cd yt-ingest",
+          "python add_source_nessihenize.py"
+        ]
+      }
+    },
+    {
+      "id": "MA-04",
+      "title": "Export alias maps nessihenize to vanessa_secondary",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python -m unittest test_youtube_publish_channels.py -v",
+      "onFail": {
+        "suggestions": [
+          "Ensure account_labels.HANDLE_ALIAS_MAP maps nessihenize -> vanessa_secondary",
+          "Ensure youtube_publish_channels routes secondary uploads to the correct OAuth secret"
+        ]
+      }
+    },
+    {
+      "id": "MA-06",
+      "title": "Published catalog export contains vanessa_secondary harvest rows",
+      "type": "command",
+      "deployPhase": "post-deploy",
+      "cwd": ".",
+      "command": "python test/scripts/verify_catalog_account_rows.py vanessa_secondary suno_nessihenize 15",
+      "requiresGcp": true,
+      "onFail": {
+        "suggestions": [
+          "Run scoped catch-up: yt-ingest/run_nessihenize_catchup_harvest.ps1",
+          "Confirm gs://aeonimus-workspaces/exports/suno/latest_catalog_wide.csv was rebuilt"
+        ]
+      }
+    },
+    {
+      "id": "MA-05",
+      "title": "Manual multi-account vault filter smoke",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Filter Vault by vanessa_secondary and confirm @nessihenize songs appear after harvest",
+        "Confirm vanessa_primary and vanessa_secondary can coexist under one Sundrop login",
+        "Confirm nightly suno-harvest includes nessihenize via Firestore source registry"
+      ]
+    }
+  ]
+}

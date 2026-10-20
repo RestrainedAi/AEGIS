@@ -4,8 +4,16 @@ import { signupCatalog, signupCatalogById } from '../lib/signupCatalog'
 import { useMediaQuery } from '../lib/useMediaQuery'
 
 type AuthControlsProps = {
-  variant?: 'compact' | 'signup'
+  variant?: 'compact' | 'signup' | 'login'
   preferredTierId?: string
+}
+
+function formatSessionDuration(durationHours: number) {
+  if (durationHours % 24 === 0) {
+    const days = durationHours / 24
+    return `${days} day${days === 1 ? '' : 's'}`
+  }
+  return `${durationHours} hours`
 }
 
 export default function AuthControls({ variant = 'compact', preferredTierId }: AuthControlsProps) {
@@ -17,7 +25,9 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
     token,
     loadingSession,
     sessionError,
+    sessionDurationHours,
     refreshSession,
+    setSessionDurationHours,
     signInWithGoogle,
     sendMagicLink,
     signOutUser,
@@ -66,8 +76,35 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
     'Guest'
 
   const accessRequestStatus = session?.accessRequest?.status || ''
+  const hasWorkspaceAccess = Boolean(session?.activeWorkspace) || Boolean(session?.platformAdmin)
   const canSubmitFreshRequest = accessRequestStatus !== 'pending'
   const needsApproval = Boolean(firebaseUser && session?.needsApproval && !session?.activeWorkspace && !session?.platformAdmin)
+  const loginStateMessage = useMemo(() => {
+    if (variant !== 'login') return ''
+    if (loadingSession) return 'Checking your access…'
+    if (sessionError) return sessionError
+    if (!firebaseUser) return ''
+    if (hasWorkspaceAccess) return 'Account confirmed. Opening your vault…'
+    if (accessRequestStatus === 'pending') {
+      return 'Your beta signup is pending review. You can wait for approval or open Beta Signup to update your request.'
+    }
+    if (accessRequestStatus === 'denied') {
+      return 'No active account was opened for this Google login. You can try a different Google account or return to Beta Signup to request access again.'
+    }
+    if (accessRequestStatus === 'withdrawn') {
+      return 'This Google login does not have an active account right now. You can try again with another Google account or start a fresh Beta Signup request.'
+    }
+    return 'No account found for this Google login. Try another Google account or continue to Beta Signup if you still need access.'
+  }, [variant, loadingSession, sessionError, firebaseUser, hasWorkspaceAccess, accessRequestStatus])
+
+  useEffect(() => {
+    if (variant !== 'login') return
+    if (loadingSession || !hasWorkspaceAccess || typeof window === 'undefined') return
+    const nextPath = '/vault'
+    if (window.location.pathname !== nextPath) {
+      window.location.assign(nextPath)
+    }
+  }, [variant, loadingSession, hasWorkspaceAccess])
 
   async function handleGoogleSignIn() {
     setWorking(true)
@@ -103,6 +140,39 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
     setNotice('')
     try {
       await signOutUser()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function handleSessionDurationChange(rawValue: string) {
+    const durationHours = Number(rawValue)
+    if (!Number.isInteger(durationHours) || durationHours < 72 || durationHours > 744) {
+      setNotice('Choose a whole number from 72 hours to 31 days.')
+      return
+    }
+    setWorking(true)
+    setNotice('')
+    try {
+      await setSessionDurationHours(durationHours)
+      setNotice(`You will stay signed in for up to ${formatSessionDuration(durationHours)} on this browser.`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function handleRetryGoogleSignIn() {
+    setWorking(true)
+    setNotice('')
+    try {
+      if (firebaseUser) {
+        await signOutUser()
+      }
+      await signInWithGoogle()
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -291,7 +361,7 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
                 <p style={compactMetaStyle}>Google sign-in is the active beta sign-in path right now.</p>
               )}
               <a href="/signup" style={compactLinkButtonLayoutStyle}>
-                Request Beta Access
+                Beta Signup
               </a>
             </>
           ) : (
@@ -299,6 +369,20 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
               <button style={compactSecondaryButtonLayoutStyle} onClick={() => void handleSignOut()} disabled={working}>
                 Sign Out
               </button>
+              <label style={compactFieldLabelStyle}>
+                Stay signed in (hours)
+                <input
+                  style={inputStyle}
+                  type="number"
+                  min={72}
+                  max={744}
+                  step={1}
+                  value={sessionDurationHours}
+                  onChange={(event) => void handleSessionDurationChange(event.target.value)}
+                  disabled={working || loadingSession}
+                />
+                <span style={compactMetaStyle}>Default: 240 hours (10 days). Range: 72 hours to 31 days.</span>
+              </label>
               {session?.workspaces?.length && session.workspaces.length > 1 ? (
                 <label style={compactFieldLabelStyle}>
                   Workspace
@@ -346,14 +430,40 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
           </div>
         )}
 
-        {!!sessionError && <p style={noticeStyle}>{sessionError}</p>}
-        {!!notice && <p style={noticeStyle}>{notice}</p>}
+      </div>
+    )
+  }
+
+  if (variant === 'login') {
+    const loginShellLayoutStyle: CSSProperties = {
+      display: 'grid',
+      gap: 14,
+      width: '100%',
+    }
+
+    return (
+      <div style={loginShellLayoutStyle}>
+        <button
+          style={{ ...loginPrimaryButtonStyle, opacity: loadingSession ? 0.72 : 1 }}
+          onClick={() => void (firebaseUser ? handleRetryGoogleSignIn() : handleGoogleSignIn())}
+          disabled={!clientReady || working || loadingSession}
+        >
+          {firebaseUser && !hasWorkspaceAccess ? 'Google Login Again' : 'Google Login'}
+        </button>
+        <a href="/signup" style={loginSecondaryLinkStyle}>
+          Beta Signup
+        </a>
+        {!!loginStateMessage && (
+          <p style={loginMessageStyle(hasWorkspaceAccess, Boolean(sessionError), Boolean(firebaseUser && !hasWorkspaceAccess))}>
+            {loginStateMessage}
+          </p>
+        )}
       </div>
     )
   }
 
   if (variant === 'signup') {
-    const signupHasWorkspaceAccess = Boolean(session?.activeWorkspace) || Boolean(session?.platformAdmin)
+    const signupHasWorkspaceAccess = hasWorkspaceAccess
     const signupStatusLabel = loadingSession
       ? 'Checking session'
       : session?.legacyMode
@@ -368,7 +478,7 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
       accessRequestStatus === 'denied' || accessRequestStatus === 'withdrawn'
         ? 'Request Access Again'
         : 'Send the beta request'
-    const sourceOptions = ['Visual Synthesis', 'Neural Architecture', 'Algorithmic Sound', 'Strategic Governance']
+    const sourceOptions = ['Artist Catalog', 'Label Operations', 'Publisher Review', 'Security Administration']
 
     const signupShellLayoutStyle: CSSProperties = {
       ...signupShellStyle,
@@ -439,7 +549,7 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
         <div style={signupHeaderLayoutStyle}>
           <div>
             <p style={signupKickerStyle}>Beta Request</p>
-            <h2 style={signupTitleStyle}>Initialize your application by connecting your identity node.</h2>
+            <h2 style={signupTitleStyle}>Start your beta request by connecting your Google account.</h2>
           </div>
           <p style={signupStatusStyle}>{signupStatusLabel}</p>
         </div>
@@ -487,12 +597,12 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
 
         <div style={signupDividerLayoutStyle}>
           <div style={signupDividerRuleStyle} />
-          <span style={signupDividerTextStyle}>Intent metadata</span>
+          <span style={signupDividerTextStyle}>Request details</span>
         </div>
 
         <div style={signupFormStackLayoutStyle}>
           <label style={signupFieldLabelStyle}>
-            Primary domain
+            Workspace focus
             <select
               style={inputStyle}
               value={requestedWorkspaceName}
@@ -508,10 +618,10 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
           </label>
 
           <label style={signupFieldLabelStyle}>
-            Manifesto (short)
+            Intended use
             <textarea
               style={textareaStyle}
-              placeholder="Why should you join the Sovereign Shell?"
+              placeholder="Tell us how you plan to use sundrop music."
               value={intendedUse}
               onChange={(event) => setIntendedUse(event.target.value)}
               disabled={working}
@@ -661,7 +771,7 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
           {signupRequestButtonLabel}
         </button>
 
-        <p style={signupFootnoteStyle}>Encrypted handshake protocol v4.02 active</p>
+        <p style={signupFootnoteStyle}>Google sign-in and workspace security checks are active.</p>
 
         {variant === 'signup' && !firebaseUser && (
           <p style={signupHelperStyle}>
@@ -682,7 +792,6 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
     )
   }
 
-  const hasWorkspaceAccess = Boolean(session?.activeWorkspace) || Boolean(session?.platformAdmin)
   const requestButtonLabel =
     accessRequestStatus === 'denied' || accessRequestStatus === 'withdrawn' ? 'Request Access Again' : 'Request Access'
 
@@ -725,9 +834,25 @@ export default function AuthControls({ variant = 'compact', preferredTierId }: A
         )}
 
         {firebaseUser && (
-          <button style={secondaryButtonStyle} onClick={() => void handleSignOut()} disabled={working}>
-            Sign Out
-          </button>
+          <>
+            <button style={secondaryButtonStyle} onClick={() => void handleSignOut()} disabled={working}>
+              Sign Out
+            </button>
+            <label style={fieldLabelStyle}>
+              Stay signed in (hours)
+              <input
+                style={inputStyle}
+                type="number"
+                min={72}
+                max={744}
+                step={1}
+                value={sessionDurationHours}
+                onChange={(event) => void handleSessionDurationChange(event.target.value)}
+                disabled={working || loadingSession}
+              />
+              <span style={metaStyle}>Default: 240 hours (10 days). Range: 72 hours to 31 days.</span>
+            </label>
+          </>
         )}
       </div>
 
@@ -1350,3 +1475,53 @@ const signupHelperStyle: CSSProperties = {
   lineHeight: 1.6,
   fontSize: 13,
 }
+
+const loginPrimaryButtonStyle: CSSProperties = {
+  ...signupPrimaryButtonStyle,
+  minHeight: 72,
+  borderRadius: 18,
+  fontSize: 13,
+  letterSpacing: '0.22em',
+}
+
+const loginSecondaryLinkStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 72,
+  padding: '0 18px',
+  borderRadius: 18,
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  background: 'rgba(255, 255, 255, 0.03)',
+  color: '#f3f6ff',
+  fontFamily: '"Space Grotesk", "Segoe UI", sans-serif',
+  fontSize: 13,
+  fontWeight: 700,
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase',
+  textDecoration: 'none',
+}
+
+const loginMessageStyle = (hasAccess: boolean, hasError: boolean, needsAction: boolean): CSSProperties => ({
+  margin: 0,
+  padding: '14px 16px',
+  borderRadius: 16,
+  background: hasError
+    ? 'rgba(255, 113, 108, 0.08)'
+    : hasAccess
+      ? 'rgba(0, 227, 253, 0.08)'
+      : needsAction
+        ? 'rgba(255, 189, 92, 0.08)'
+        : 'rgba(255, 255, 255, 0.04)',
+  border: hasError
+    ? '1px solid rgba(255, 113, 108, 0.18)'
+    : hasAccess
+      ? '1px solid rgba(0, 227, 253, 0.18)'
+      : needsAction
+        ? '1px solid rgba(255, 189, 92, 0.18)'
+        : '1px solid rgba(255, 255, 255, 0.08)',
+  color: hasError ? '#ffb1a9' : hasAccess ? '#bdf8ff' : needsAction ? '#ffd699' : 'rgba(231, 229, 231, 0.72)',
+  lineHeight: 1.6,
+  fontSize: 13,
+  textAlign: 'center',
+})

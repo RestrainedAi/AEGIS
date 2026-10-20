@@ -1,11 +1,63 @@
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import AdminControlCenter from './components/AdminControlCenter'
 import AuthControls from './components/AuthControls'
+import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VaultGrid from './components/VaultGrid'
 import { useMediaQuery } from './lib/useMediaQuery'
 const APP_NAME = 'sundrop'
 const SUPPORT_EMAIL = 'blahnikdigitaldesigns@gmail.com'
+const GLOBAL_SCROLLBAR_STYLE_ID = 'sundrop-global-scrollbars'
+
+function useGlobalScrollbarStyles() {
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (document.getElementById(GLOBAL_SCROLLBAR_STYLE_ID)) return
+
+    const style = document.createElement('style')
+    style.id = GLOBAL_SCROLLBAR_STYLE_ID
+    style.textContent = `
+      html {
+        scrollbar-width: auto;
+        scrollbar-color: #8e63ff rgba(10, 13, 20, 0.92);
+      }
+
+      body::-webkit-scrollbar,
+      *::-webkit-scrollbar {
+        width: 16px;
+        height: 16px;
+      }
+
+      body::-webkit-scrollbar-track,
+      *::-webkit-scrollbar-track {
+        background: rgba(10, 13, 20, 0.92);
+      }
+
+      body::-webkit-scrollbar-thumb,
+      *::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #b18cff 0%, #8e63ff 52%, #6c44f5 100%);
+        border: 3px solid rgba(10, 13, 20, 0.92);
+        border-radius: 999px;
+        min-height: 48px;
+      }
+
+      body::-webkit-scrollbar-thumb:hover,
+      *::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #c7a8ff 0%, #9d78ff 52%, #7a54ff 100%);
+      }
+
+      body::-webkit-scrollbar-corner,
+      *::-webkit-scrollbar-corner {
+        background: rgba(10, 13, 20, 0.92);
+      }
+    `
+    document.head.appendChild(style)
+
+    return () => {
+      style.remove()
+    }
+  }, [])
+}
 
 function pageShell(title: string, content: ReactNode, eyebrow = 'sundrop cloud') {
   return (
@@ -16,7 +68,8 @@ function pageShell(title: string, content: ReactNode, eyebrow = 'sundrop cloud')
             <a href="/" style={brandStyle}>{APP_NAME}</a>
             <nav style={navStyle}>
               <a href="/vault" style={navLinkStyle}>Vault</a>
-              <a href="/signup" style={navLinkStyle}>Request Beta Access</a>
+              <a href="/login" style={navLinkStyle}>Login</a>
+              <a href="/signup" style={navLinkStyle}>Beta Signup</a>
               <a href="/control-center" style={navLinkStyle}>Control Center</a>
               <a href="/privacy" style={navLinkStyle}>Privacy</a>
               <a href="/terms" style={navLinkStyle}>Terms</a>
@@ -36,8 +89,8 @@ function pageShell(title: string, content: ReactNode, eyebrow = 'sundrop cloud')
 
       <footer style={footerStyle}>
         <div>
-          <strong>{APP_NAME}</strong> keeps beta access, Vault preservation, and publishing controls
-          connected while sundrop music stays focused on harvest and source-side tools.
+          <strong>{APP_NAME}</strong> keeps account access, Vault preservation, and publishing controls
+          connected while sundrop music stays focused on music source, catalog, and delivery tools.
         </div>
         <div style={footerLinksStyle}>
           <a href="/privacy" style={footerLinkStyle}>Privacy Policy</a>
@@ -50,40 +103,41 @@ function pageShell(title: string, content: ReactNode, eyebrow = 'sundrop cloud')
 }
 
 function HomePage() {
+  useGlobalScrollbarStyles()
   const isCompact = useMediaQuery('(max-width: 920px)')
   const pulseStrip = [
-    'NODE_ALPHA: ACTIVE',
-    'HARVEST_RATE: 4.2GB/S',
-    'INGEST_STREAM: SUNO_MAIN_GATE',
-    'LATENCY: 0.002MS',
-    'VAULT_ENCRYPTION: QUANTUM_S1',
-    'SYNAPSE_COUNT: 850T',
-    'STATUS: OPTIMAL',
+    'CATALOG_SYNC: ACTIVE',
+    'AUDIO_INDEX: CURRENT',
+    'SOURCE_STREAM: SUNO + YOUTUBE',
+    'API_LATENCY: 42MS',
+    'VAULT_SECURITY: ENFORCED',
+    'EXPORT_QUEUE: READY',
+    'STATUS: HEALTHY',
   ]
 
   const harvestSignals = [
-    'Multimodal YouTube synthesis',
-    'Suno sonic fingerprinting',
-    'Semantic fabric alignment',
+    'Suno source ingestion',
+    'YouTube metadata indexing',
+    'Catalog integrity validation',
   ]
 
   const vaultCards = [
     {
       label: '001 / CAPACITY',
-      title: 'Infinite Horizon',
-      body: 'Elastic storage that expands with your creative ambitions. No limits, only scale.',
+      title: 'Scalable Library',
+      body: 'Storage grows with your catalog so tracks, artwork, and lyrics stay organized as the library expands.',
       tone: 'primary',
     },
     {
       label: '002 / SECURITY',
-      title: 'Sovereign Proof',
-      body: 'Zero-knowledge architecture keeps your harvest and metadata aligned to your identity.',
+      title: 'Access Control',
+      body: 'Authentication, workspace controls, and package permissions keep account access aligned with the right team and catalog.',
       tone: 'secondary',
     },
     {
       label: '003 / RETRIEVAL',
-      title: 'Instant Recall',
-      body: 'Sub-millisecond retrieval of any preserved artifact in your curated vault.',
+      title: 'Fast Retrieval',
+      body: 'Music files, manifests, and export packages stay available through a single retrieval surface in the Vault.',
       tone: 'tertiary',
     },
   ]
@@ -91,25 +145,25 @@ function HomePage() {
   const ascentCards = [
     {
       phase: 'PHASE_01',
-      title: 'Primal Synthesis',
+      title: 'Source Intake',
       accent: '#00e3fd',
       bg: 'radial-gradient(circle at 30% 20%, rgba(0, 227, 253, 0.16), transparent 45%), linear-gradient(180deg, rgba(23, 32, 51, 0.3), rgba(0, 0, 0, 0.85))',
     },
     {
       phase: 'PHASE_02',
-      title: 'Pattern Recognition',
+      title: 'Metadata Review',
       accent: '#cdbdff',
       bg: 'radial-gradient(circle at 50% 20%, rgba(205, 189, 255, 0.15), transparent 42%), linear-gradient(180deg, rgba(23, 32, 51, 0.24), rgba(0, 0, 0, 0.85))',
     },
     {
       phase: 'PHASE_03',
-      title: 'Cognitive Mapping',
+      title: 'Security Controls',
       accent: '#ffbd5c',
       bg: 'radial-gradient(circle at 40% 24%, rgba(255, 189, 92, 0.16), transparent 44%), linear-gradient(180deg, rgba(23, 32, 51, 0.22), rgba(0, 0, 0, 0.86))',
     },
     {
       phase: 'PHASE_04',
-      title: 'The Singularity',
+      title: 'Delivery Ready',
       accent: '#ff716c',
       bg: 'radial-gradient(circle at 50% 18%, rgba(255, 113, 108, 0.18), transparent 40%), linear-gradient(180deg, rgba(23, 32, 51, 0.22), rgba(0, 0, 0, 0.9))',
     },
@@ -259,13 +313,13 @@ function HomePage() {
           <div style={landingBrandRowLayoutStyle}>
             <a href="/" style={landingBrandStyle}>sundrop</a>
             <div style={landingBrandDividerLayoutStyle} />
-            <span style={landingSloganStyle}>Aether-core protocol 0.1</span>
+            <span style={landingSloganStyle}>Music catalog platform</span>
           </div>
 
           <nav style={landingNavLayoutStyle} aria-label="Primary">
-            <a href="#harvest" style={landingNavLinkStyle}>The Harvest</a>
+            <a href="#harvest" style={landingNavLinkStyle}>Music Intake</a>
             <a href="#vault" style={landingNavLinkStyle}>The Vault</a>
-            <a href="#intelligence" style={landingNavLinkStyle}>Intelligence</a>
+            <a href="#intelligence" style={landingNavLinkStyle}>Security</a>
             <a href="/signup" style={landingNavButtonStyle}>Get Access</a>
           </nav>
         </div>
@@ -274,17 +328,17 @@ function HomePage() {
       <main style={landingMainLayoutStyle}>
         <section style={landingHeroSectionLayoutStyle}>
           <div style={landingHeroCopyLayoutStyle}>
-            <p style={landingEyebrowStyle}>Aether-core protocol 0.1</p>
+            <p style={landingEyebrowStyle}>Music catalog platform</p>
             <h1 style={landingHeroTitleLayoutStyle}>
-              The Aether-Core of Artisanal <span style={landingHeroAccentStyle}>Intelligence</span>
+              Music catalog management with <span style={landingHeroAccentStyle}>security-first storage</span>
             </h1>
             <p style={landingHeroLeadLayoutStyle}>
-              sundrop weaves the neural fabric of tomorrow. We curate and ingest the sacred harvest
-              of YouTube and Suno data to forge a sovereign intelligence unlike any other.
+              sundrop brings Suno and YouTube music data into a controlled workspace for intake,
+              indexing, storage, export packaging, and publishing operations.
             </p>
             <div style={landingHeroCtaRowLayoutStyle}>
-              <a href="/signup" style={landingPrimaryButtonLayoutStyle}>Begin the Harvest</a>
-              <a href="/control-center" style={landingSecondaryButtonLayoutStyle}>View the Vault</a>
+              <a href="/signup" style={landingPrimaryButtonLayoutStyle}>Start Beta Signup</a>
+              <a href="/login" style={landingSecondaryButtonLayoutStyle}>Login to Vault</a>
             </div>
           </div>
 
@@ -292,14 +346,14 @@ function HomePage() {
             <div style={landingHeroStatGroupStyle}>
               <p style={landingStatKickerStyle}>System uptime</p>
               <p style={landingStatValueStyle}>
-                99.989% <span style={landingStatSuffixStyle}>synced</span>
+                99.989% <span style={landingStatSuffixStyle}>available</span>
               </p>
             </div>
             <div style={landingStatDividerStyle} />
             <div style={landingHeroStatGroupStyle}>
-              <p style={landingStatKickerStyle}>Neural throughput</p>
+              <p style={landingStatKickerStyle}>Catalog throughput</p>
               <p style={landingStatValueStyleAccent}>
-                1.2 EB <span style={landingStatSuffixStyle}>curated</span>
+                1.2M <span style={landingStatSuffixStyle}>rows indexed</span>
               </p>
             </div>
             <div style={landingHeroOrbStyle} />
@@ -320,18 +374,17 @@ function HomePage() {
               <div style={landingVisualGlowStyle} />
             </div>
             <div style={landingCaptionCardLayoutStyle}>
-              <p style={landingCaptionTitleStyle}>The Ingestion</p>
-              <p style={landingCaptionMetaStyle}>streaming_realtime</p>
+              <p style={landingCaptionTitleStyle}>Catalog Intake</p>
+              <p style={landingCaptionMetaStyle}>music_ingest_pipeline</p>
             </div>
           </div>
 
           <div style={landingCopyPanelStyle}>
-            <p style={landingSectionEyebrowStyle}>The Harvest</p>
-            <h2 style={landingSectionTitleStyle}>We do not just collect data. We harvest signal.</h2>
+            <p style={landingSectionEyebrowStyle}>Music Intake</p>
+            <h2 style={landingSectionTitleStyle}>Built for music data, metadata, and file security.</h2>
             <p style={landingSectionBodyStyle}>
-              Every video, every melody, every transient Suno-generated frequency is processed
-              through our aether-core. This is not scraping. It is artisanal distillation of the
-              digital human experience.
+              Every song row, media asset, and source update is processed through a structured intake
+              path so the catalog stays current, searchable, and ready for secure export and publishing.
             </p>
             <ul style={landingChecklistStyle}>
               {harvestSignals.map((item) => (
@@ -348,11 +401,11 @@ function HomePage() {
           <div style={landingSectionHeaderRowLayoutStyle}>
             <div style={landingSectionHeadingBlockStyle}>
               <p style={landingSectionEyebrowStyle}>The Vault</p>
-              <h2 style={landingSectionTitleStyle}>Sovereign storage for the era of intelligence.</h2>
+              <h2 style={landingSectionTitleStyle}>Secure storage for music catalogs and delivery assets.</h2>
             </div>
             <p style={landingSectionSupportBodyStyle}>
-              Your harvested assets reside in a quantum-secure environment, accessible only through
-              the sundrop identity protocol.
+              Catalog files, packaged downloads, and publishing controls stay inside a single
+              authenticated environment with workspace-based access.
             </p>
           </div>
 
@@ -369,8 +422,8 @@ function HomePage() {
 
         <section id="intelligence" style={landingAscentSectionStyle}>
           <div style={landingAscentHeadingStyle}>
-            <h2 style={landingAscentTitleStyle}>Witness the Ascent of Intelligence</h2>
-            <p style={landingAscentSubtitleStyle}>Visualizing the neural evolution</p>
+            <h2 style={landingAscentTitleStyle}>Operational visibility across music and security</h2>
+            <p style={landingAscentSubtitleStyle}>Tracking the path from intake to secure delivery</p>
           </div>
 
           <div style={landingAscentGridStyle}>
@@ -386,17 +439,17 @@ function HomePage() {
 
         <section style={landingCtaSectionLayoutStyle}>
           <h2 style={landingCtaTitleStyle}>
-            Ready for the <span style={landingHeroAccentStyle}>Harvest?</span>
+            Ready to manage your <span style={landingHeroAccentStyle}>music library?</span>
           </h2>
           <p style={landingCtaBodyLayoutStyle}>
-            Join the elite circle of artisanal intelligence architects. The gates of sundrop are
-            opening.
+            Sign in or request beta access to manage music sources, protect catalog assets, and
+            prepare customer-ready packages from one secure workspace.
           </p>
-          <a href="/signup" style={landingPrimaryButtonLargeLayoutStyle}>Initiate Access</a>
+          <a href="/signup" style={landingPrimaryButtonLargeLayoutStyle}>Start Beta Signup</a>
           <div style={landingProtocolRowStyle}>
-            <span>Vault protocols: secure</span>
-            <span>Harvest nodes: online</span>
-            <span>License: sovereign</span>
+            <span>Vault security: active</span>
+            <span>Catalog intake: online</span>
+            <span>Access policy: enforced</span>
           </div>
         </section>
       </main>
@@ -408,31 +461,31 @@ function HomePage() {
               <span style={landingFooterBrandStyle}>sundrop</span>
             </div>
             <p style={landingFooterBodyLayoutStyle}>
-              The future of media ingestion and storage. Precision engineered in the aether for the
-              modern creator.
+              A secure platform for music catalog intake, storage, packaging, and publishing
+              operations.
             </p>
           </div>
           <div>
-            <p style={landingFooterLabelStyle}>The Process</p>
+            <p style={landingFooterLabelStyle}>Platform</p>
             <ul style={landingFooterListStyle}>
-              <li>The Harvest</li>
+              <li>Music Intake</li>
               <li>The Vault</li>
-              <li>Aether-core</li>
+              <li>Downloads</li>
             </ul>
           </div>
           <div>
-            <p style={landingFooterLabelStyleAccent}>Intelligence</p>
+            <p style={landingFooterLabelStyleAccent}>Music Ops</p>
             <ul style={landingFooterListStyle}>
-              <li>Neural Fabric</li>
-              <li>Asset Minting</li>
-              <li>The Lab</li>
+              <li>Catalog Review</li>
+              <li>Export Packaging</li>
+              <li>YouTube Publishing</li>
             </ul>
           </div>
           <div>
-            <p style={landingFooterLabelStyleTertiary}>Sovereignty</p>
+            <p style={landingFooterLabelStyleTertiary}>Security</p>
             <ul style={landingFooterListStyle}>
-              <li>Privacy Lexicon</li>
-              <li>Terms of Vault</li>
+              <li>Privacy Policy</li>
+              <li>Terms of Service</li>
               <li>Status</li>
             </ul>
           </div>
@@ -547,7 +600,8 @@ function usePageMetadata(pathname: string) {
       '/terms': `${APP_NAME} | Terms of Service`,
       '/vault': `${APP_NAME} | Vault`,
       '/control-center': `${APP_NAME} | Control Center`,
-      '/signup': `${APP_NAME} | Request Beta Access`,
+      '/login': `${APP_NAME} | Login`,
+      '/signup': `${APP_NAME} | Beta Signup`,
     }
 
     document.title = titleByPath[pathname] || `${APP_NAME} | Vault`
@@ -567,6 +621,7 @@ function usePageMetadata(pathname: string) {
 }
 
 export default function App() {
+  useGlobalScrollbarStyles()
   const pathname = window.location.pathname
   usePageMetadata(pathname)
 
@@ -582,6 +637,7 @@ export default function App() {
   if (pathname === '/privacy') return <PrivacyPage />
   if (pathname === '/terms') return <TermsPage />
   if (pathname === '/control-center') return <AdminControlCenter />
+  if (pathname === '/login') return <LoginPage />
   if (pathname === '/signup') return <SignupPage />
   if (pathname === '/vault') return <VaultGrid />
   if (pathname === '/vanessa') return null

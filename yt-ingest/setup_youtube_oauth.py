@@ -30,6 +30,10 @@ from gcp_access_token import get_access_token
 PROJECT = "stable-framing-482501-t9"
 SECRET_CLIENT = "youtube-oauth-client-secrets"
 SECRET_OAUTH = "youtube-oauth-refresh-token"
+PUBLISH_CHANNEL_SECRETS = {
+    "vanessa_primary": SECRET_OAUTH,
+    "vanessa_secondary": "youtube-oauth-refresh-token-vanessa-secondary",
+}
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
@@ -181,6 +185,12 @@ def main() -> int:
         action="store_true",
         help="Do not auto-open the browser; print the consent URL instead.",
     )
+    parser.add_argument(
+        "--channel",
+        choices=sorted(PUBLISH_CHANNEL_SECRETS.keys()),
+        default="vanessa_primary",
+        help="Publish channel / account label to store OAuth credentials for.",
+    )
     args = parser.parse_args()
 
     gcp_token = get_access_token()
@@ -199,8 +209,9 @@ def main() -> int:
         return 0
 
     if args.update_secret:
-        add_secret_version(gcp_token, SECRET_OAUTH, refresh_token)
-        print(f"\nUpdated Secret Manager secret: {SECRET_OAUTH}")
+        target_secret = PUBLISH_CHANNEL_SECRETS[args.channel]
+        add_secret_version(gcp_token, target_secret, refresh_token)
+        print(f"\nUpdated Secret Manager secret: {target_secret} (channel={args.channel})")
         return 0
 
     print("\nRefresh token minted successfully.")

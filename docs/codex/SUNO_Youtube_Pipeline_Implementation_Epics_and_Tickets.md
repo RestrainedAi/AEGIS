@@ -10,6 +10,8 @@ This document converts the approved project map into implementation-ready epics 
 
 ## Usage Notes
 
+Current execution policy: [Development DNA](DEVELOPMENT_PRINCIPLES.md). Each feature has one accountable owner, and large features have bounded specialist tasks with explicit context, dependencies, write ownership, and acceptance checks. Record assignments and evidence in the [feature brief](templates/FEATURE_BRIEF.md) linked to the [existing board](../board/README.md). The historical ticket proposals below do not establish current implementation status or actual external Jira issues.
+
 1. These epics assume the current canonical docs set in `docs/codex/`.
 2. Where production truth is still not confirmed, tickets are written to force that decision early.
 3. Ticket language is written so it can be copied into Jira, Linear, Notion, or GitHub Issues with minimal editing.

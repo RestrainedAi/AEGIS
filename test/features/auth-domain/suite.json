@@ -1,0 +1,66 @@
+{
+  "featureId": "auth-domain",
+  "title": "Auth Entry Points and Domain Cutover",
+  "module": "suno-viewer",
+  "deployPhase": "post-deploy",
+  "scopeTicket": "domain migration, DEV-72 auth regression",
+  "wireframeRef": "docs/codex/AEGIS_SUNDROP_DOMAIN_MIGRATION_TICKET_STACK_2026-04-09.md",
+  "steps": [
+    {
+      "id": "AD-01",
+      "title": "sundrop.cloud root responds",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AD-02",
+      "title": "sundrop.cloud /login responds",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/login",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AD-03",
+      "title": "sundrop.cloud /signup responds",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/signup",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AD-04",
+      "title": "sundrop.cloud /vault responds",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/vault",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AD-05",
+      "title": "sundrop.music /vault responds",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.music/vault",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AD-06",
+      "title": "Manual authenticated login-to-vault checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Login on sundrop.cloud redirects to /vault",
+        "Vanessa session exposes vault.browse and export entitlements",
+        "Unauthenticated /vault shows gated access, not a broken route"
+      ]
+    }
+  ]
+}

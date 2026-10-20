@@ -17,6 +17,12 @@ Shared product/design work is called out separately so it can be linked rather t
 
 ## Recommended Jira Model
 
+### Delivery contract for each feature
+
+Use [Development DNA](DEVELOPMENT_PRINCIPLES.md) and the [feature brief](templates/FEATURE_BRIEF.md) for every feature planned below. Record exactly one accountable feature owner, the actual agent assignment, acceptance criteria, dependencies, and bounded specialist tasks for large features. Keep schema/shared-file writers consistent with [workstream ownership](AEGIS_Workstream_Ownership_And_Change_Control.md).
+
+Each specialist task must name its owned output, relevant context, acceptance check, and handoff recipient. The feature owner inspects and integrates the handoffs, records skipped/unexecuted checks, and closes only verified required outcomes. Preserve unfinished work as partial or blocked with a next action and resumption condition. This document remains a Jira planning artifact; it does not prove external issues or live agents exist.
+
 Use:
 
 1. two top-level stream epics if you want speed, or

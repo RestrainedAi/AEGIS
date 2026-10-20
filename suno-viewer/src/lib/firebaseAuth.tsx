@@ -38,6 +38,61 @@ void setPersistence(firebaseAuth, browserLocalPersistence)
 
 const emailLinkUrl = buildActiveCloudUrl('/vault')
 export const MAGIC_LINK_ENABLED = false
+export const DEFAULT_VAULT_SESSION_HOURS = 10 * 24
+export const MIN_VAULT_SESSION_HOURS = 72
+export const MAX_VAULT_SESSION_HOURS = 31 * 24
+
+const VAULT_SESSION_PREFERENCE_KEY = 'sundrop.vault.session-preference.v1'
+const TOKEN_REFRESH_INTERVAL_MS = 30 * 60 * 1000
+const SESSION_EXPIRY_CHECK_INTERVAL_MS = 15 * 60 * 1000
+
+type VaultSessionPreference = {
+  uid: string
+  durationHours: number
+  // Kept only while existing browser preferences migrate to the hour-based setting.
+  durationDays?: number
+  expiresAt: number
+}
+
+function normalizeSessionDurationHours(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_VAULT_SESSION_HOURS
+  return Math.min(MAX_VAULT_SESSION_HOURS, Math.max(MIN_VAULT_SESSION_HOURS, Math.round(value)))
+}
+
+function readVaultSessionPreference(): VaultSessionPreference | null {
+  try {
+    const raw = window.localStorage.getItem(VAULT_SESSION_PREFERENCE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<VaultSessionPreference>
+    if (!parsed.uid || !Number.isFinite(parsed.expiresAt)) return null
+    const legacyDurationDays = Number(parsed.durationDays)
+    const requestedHours = Number.isFinite(parsed.durationHours)
+      ? Number(parsed.durationHours)
+      : legacyDurationDays * 24
+    return {
+      uid: parsed.uid,
+      durationHours: normalizeSessionDurationHours(requestedHours),
+      expiresAt: Number(parsed.expiresAt),
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveVaultSessionPreference(uid: string, durationHours: number) {
+  const normalizedHours = normalizeSessionDurationHours(durationHours)
+  const preference: VaultSessionPreference = {
+    uid,
+    durationHours: normalizedHours,
+    expiresAt: Date.now() + normalizedHours * 60 * 60 * 1000,
+  }
+  window.localStorage.setItem(VAULT_SESSION_PREFERENCE_KEY, JSON.stringify(preference))
+  return preference
+}
+
+function clearVaultSessionPreference() {
+  window.localStorage.removeItem(VAULT_SESSION_PREFERENCE_KEY)
+}
 
 type AuthContextValue = {
   clientReady: boolean
@@ -46,7 +101,9 @@ type AuthContextValue = {
   session: AuthSession | null
   loadingSession: boolean
   sessionError: string
+  sessionDurationHours: number
   refreshSession: () => Promise<void>
+  setSessionDurationHours: (durationHours: number) => Promise<void>
   signInWithGoogle: () => Promise<void>
   sendMagicLink: (email: string) => Promise<void>
   signOutUser: () => Promise<void>
@@ -63,6 +120,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [sessionError, setSessionError] = useState('')
   const [sessionRevision, setSessionRevision] = useState(0)
   const [authResolved, setAuthResolved] = useState(false)
+  const [sessionDurationHours, setSessionDurationHoursState] = useState(DEFAULT_VAULT_SESSION_HOURS)
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +153,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const unsubscribe = onIdTokenChanged(firebaseAuth, async (user) => {
       if (cancelled) return
+
+      if (user) {
+        const savedPreference = readVaultSessionPreference()
+        if (savedPreference?.uid === user.uid && savedPreference.expiresAt <= Date.now()) {
+          clearVaultSessionPreference()
+          await signOut(firebaseAuth)
+          return
+        }
+
+        const preference = savedPreference?.uid === user.uid
+          ? savedPreference
+          : saveVaultSessionPreference(user.uid, DEFAULT_VAULT_SESSION_HOURS)
+        setSessionDurationHoursState(preference.durationHours)
+      } else {
+        setSessionDurationHoursState(DEFAULT_VAULT_SESSION_HOURS)
+      }
+
       setFirebaseUser(user)
       const nextToken = user ? await user.getIdToken() : ''
       if (!cancelled) {
@@ -108,6 +183,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
       unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!firebaseUser) return
+
+    let cancelled = false
+    const renewToken = async (forceRefresh = false) => {
+      try {
+        // Reuse a valid token on tab return. Forcing a fresh token here changes
+        // auth state and reloads the session/catalog on every app switch.
+        await firebaseAuth.currentUser?.getIdToken(forceRefresh)
+      } catch (error) {
+        if (!cancelled) {
+          setSessionError(error instanceof Error ? error.message : String(error))
+        }
+      }
+    }
+    const enforceSessionExpiry = async () => {
+      const preference = readVaultSessionPreference()
+      if (!preference || preference.uid !== firebaseUser.uid) {
+        const nextPreference = saveVaultSessionPreference(firebaseUser.uid, DEFAULT_VAULT_SESSION_HOURS)
+        setSessionDurationHoursState(nextPreference.durationHours)
+        return
+      }
+      if (preference.expiresAt <= Date.now()) {
+        clearVaultSessionPreference()
+        await signOut(firebaseAuth)
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void enforceSessionExpiry()
+        void renewToken()
+      }
+    }
+
+    void enforceSessionExpiry()
+    const refreshTimer = window.setInterval(() => void renewToken(true), TOKEN_REFRESH_INTERVAL_MS)
+    const expiryTimer = window.setInterval(() => void enforceSessionExpiry(), SESSION_EXPIRY_CHECK_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(refreshTimer)
+      window.clearInterval(expiryTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [firebaseUser])
 
   useEffect(() => {
     let cancelled = false
@@ -172,27 +294,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       loadingSession,
       sessionError,
+      sessionDurationHours,
       refreshSession: async () => {
         setSessionRevision((current) => current + 1)
       },
-    signInWithGoogle: async () => {
-      await signInWithPopup(firebaseAuth, new GoogleAuthProvider())
-    },
-    sendMagicLink: async (email: string) => {
-      if (!MAGIC_LINK_ENABLED) {
-        throw new Error('Email magic link is not enabled during beta yet. Use Google sign-in for now.')
-      }
-      await sendSignInLinkToEmail(firebaseAuth, email, {
-        url: emailLinkUrl,
-        handleCodeInApp: true,
-      })
-      window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, email)
+      setSessionDurationHours: async (durationHours: number) => {
+        const user = firebaseAuth.currentUser
+        if (!user) throw new Error('Sign in before changing the stay-signed-in setting.')
+        const preference = saveVaultSessionPreference(user.uid, durationHours)
+        setSessionDurationHoursState(preference.durationHours)
+        await user.getIdToken(true)
+      },
+      signInWithGoogle: async () => {
+        const provider = new GoogleAuthProvider()
+        provider.setCustomParameters({ prompt: 'select_account' })
+        const result = await signInWithPopup(firebaseAuth, provider)
+        const preference = saveVaultSessionPreference(result.user.uid, sessionDurationHours)
+        setSessionDurationHoursState(preference.durationHours)
+      },
+      sendMagicLink: async (email: string) => {
+        if (!MAGIC_LINK_ENABLED) {
+          throw new Error('Email magic link is not enabled during beta yet. Use Google sign-in for now.')
+        }
+        await sendSignInLinkToEmail(firebaseAuth, email, {
+          url: emailLinkUrl,
+          handleCodeInApp: true,
+        })
+        window.localStorage.setItem(EMAIL_LINK_STORAGE_KEY, email)
       },
       signOutUser: async () => {
+        clearVaultSessionPreference()
         await signOut(firebaseAuth)
       },
     }),
-    [clientReady, firebaseUser, token, session, loadingSession, sessionError]
+    [clientReady, firebaseUser, token, session, loadingSession, sessionError, sessionDurationHours]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

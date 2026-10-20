@@ -143,7 +143,7 @@
     "owner": "Web App",
     "stream": "Bridge",
     "summary": "Complete the publish handoff from catalog UI to YouTube queueing.",
-    "notes": "Validated on 2026-04-07. The live Vault creates queue rows, yt-upload-job processes them successfully, and Firestore song docs receive durable ytStatus, ytVideoId, ytCanonicalUrl, and ytPublishedAt writeback.",
+    "notes": "Validated on 2026-04-07. The live Vault creates queue rows, yt-upload-job processes them successfully, and Firestore song docs receive durable ytStatus, ytVideoId, ytCanonicalUrl, and ytPublishedAt writeback. Reconfirmed on 2026-05-17 during the sundrop.cloud / sundrop.music cutover regression pass: a real unpublished song queued from the live Vault flow (`c9c95102-c209-43df-896d-2d7e18a789bc`) initially exposed a YouTube `invalidDescription` failure, then passed after the uploader added YouTube-safe metadata sanitization plus a strict fallback description path. The repaired queue item completed `done` with `ytVideoId=NcA3X4JuL94`, canonical URL writeback, and synthetic lyrics captions uploaded successfully.",
     "sources": [
       "../codex/SUNO_Youtube_Pipeline_Implementation_Epics_and_Tickets.md",
       "../../suno-viewer/server.js",
@@ -298,7 +298,7 @@
     "owner": "Platform",
     "stream": "Identity",
     "summary": "Introduce real login with Google sign-in and email magic link using Firebase Auth and Identity Platform.",
-    "notes": "Moved to In Progress on 2026-04-08. Viewer runtime now initializes Firebase Admin with ADC, resolves bearer-token sessions, provisions users/{uid} records, and the client now supports Google sign-in plus email magic link with legacy-mode fallback still enabled.",
+    "notes": "Moved to In Progress on 2026-04-08. Viewer runtime now initializes Firebase Admin with ADC, resolves bearer-token sessions, provisions users/{uid} records, and the client now supports Google sign-in plus email magic link with legacy-mode fallback still enabled. On 2026-06-14 the `/login` fallback UX was tightened so a Google identity without an active workspace/account now gets explicit guidance for pending, denied, withdrawn, and no-account states instead of a silent dead-end feel. On 2026-06-15 a second auth-trust pass closed the `.music` signed-in happy path more fully: `/login -> /vault` is verified in a live browser, `sundrop.cloud/login` is serving the intended clean two-option shell, and `sundrop.music/control-center` now also works for the approved operator account after two production fixes shipped on revision `suno-viewer-00187-tm9`: server-side admin lookup now falls back to `admins` by email when the legacy UID doc misses, and `AdminControlCenter.tsx` now waits for Firebase auth/session restoration before requesting `/api/admin/overview`. On 2026-08-18 revision `suno-viewer-00210-r9f` introduced an explicit 72-744 hour client session range with a 240-hour (10-day) default and migration for existing local day-based preferences. Remaining auth regression closure is the real alternate-account no-account browser verification branch plus signed-in confirmation of the new session setting.",
     "sources": [
       "../codex/AEGIS_AUTH_ADMIN_TIERING_MONETIZATION_PLAN_2026-04-07.md",
       "../codex/AEGIS_AUTH_BILLING_TICKET_STACK_2026-04-07.md",
@@ -431,7 +431,7 @@
   {
     "id": "AEGIS-013",
     "title": "Validate export contract before publish and before serve",
-    "status": "Ready",
+    "status": "Done",
     "priority": "P0",
     "size": "M",
     "owner": "Platform",
@@ -439,7 +439,8 @@
     "summary": "Define required catalog.csv columns and fail both export and serving paths when required fields disappear unexpectedly.",
     "notes": "This is the first active prevention ticket under EPIC-18. It should make catalog contract drift explicit instead of silent by validating required columns in the export producer path and keeping the viewer-side schema guard as a second consumer-side gate.",
     "sources": [
-      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md",
+      "../codex/AEGIS_HARVEST_CONTRACT_GATE_2026-08-17.md"
     ]
   },
   {
@@ -482,7 +483,8 @@
     "summary": "Separate harvest, export contract, viewer, queue, caption, and auth/admin health so one green pipeline email does not mask a degraded product surface.",
     "notes": "Moved to In Progress on 2026-04-23. Yesterday's harvested logs now show a clearer subsystem picture than the earlier all-green summaries: the run logged repeated 403 media fetch errors and async cleanup noise, but it also rebuilt 1915 catalog rows, uploaded the canonical latest_catalog_wide.csv plus metadata, and the post-harvest monitor reported summary status=healthy with catalog_age_hours=0.0. That is the right direction, but the reporting still needs to separate harvest/media retrieval noise from catalog publish freshness and live Vault health so one 'healthy' line cannot hide a degraded user-facing surface again.",
     "sources": [
-      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md"
+      "../codex/AEGIS_REGRESSION_POSTMORTEM_AND_PREVENTION_2026-04-08.md",
+      "../codex/AEGIS_HARVEST_CONTRACT_GATE_2026-08-17.md"
     ]
   },
   {
@@ -763,7 +765,7 @@
     "owner": "Engineering",
     "stream": "Downloader",
     "summary": "Ship the first local-catalog export flow with manifest CSV packaging, asset bundling, and automatic multi-zip sharding for larger catalogs.",
-    "notes": "Moved to In Progress on 2026-04-15. A first working Tier 1 local export path now exists in suno-viewer: authenticated users with `catalog.export.local` can prepare a local catalog package, download a manifest CSV, and fetch one or more ZIP parts built from workspace-scoped audio, lyrics, and image assets. Sharding now targets a practical max part size instead of one giant archive so larger catalogs can split cleanly across multiple downloads. The 2026-04-18 through 2026-04-23 UX passes added an active queue/readiness model via `/api/catalog-exports`, simple ready-download rows with type/size/download actions, phase+step messaging for active packages, ready-state notifications, a first-class Downloads shell destination, short song-key-based asset filenames, unique per-part manifest names to avoid Windows unzip/copy conflicts, cleaner empty/error handling for non-exportable workspaces, calmer failure copy with direct support actions, removal of fake zero-byte success metrics, and removal of the one-option workspace picker in the single-workspace case. Remaining work should harden long-running export durability, add clearer request flows for single-song/selection/catalog packaging, and turn Downloads into a more persistent customer history center.",
+    "notes": "Moved to In Progress on 2026-04-15. A first working Tier 1 local export path now exists in suno-viewer: authenticated users with `catalog.export.local` can prepare a local catalog package, download a manifest CSV, and fetch one or more ZIP parts built from workspace-scoped audio, lyrics, and image assets. Sharding now targets a practical max part size instead of one giant archive so larger catalogs can split cleanly across multiple downloads. The 2026-04-18 through 2026-04-23 UX passes added an active queue/readiness model via `/api/catalog-exports`, simple ready-download rows with type/size/download actions, phase+step messaging for active packages, ready-state notifications, a first-class Downloads shell destination, short song-key-based asset filenames, unique per-part manifest names to avoid Windows unzip/copy conflicts, cleaner empty/error handling for non-exportable workspaces, calmer failure copy with direct support actions, removal of fake zero-byte success metrics, and removal of the one-option workspace picker in the single-workspace case. On 2026-05-16 the long-running export durability pass finally closed the full-catalog blocker: full export now completes `ready` on the new domains with authenticated manifest and ZIP-part downloads verified, using a stabilized 1.0 GB sharding profile plus server-side cleanup of uploaded temporary ZIPs. On 2026-05-17 a fresh selected-songs package (`9a1907147a667431`) was created and verified live through ready state on `sundrop.music`, and the restored history listing was also rechecked with both that new selection export and the existing full-catalog export (`6da643bd895b8b8d`) returning healthy manifest, summary, and ZIP URLs. Remaining work should focus on turning Downloads into a more persistent customer history center and refining broader packaging UX rather than basic export survival.",
     "sources": [
       "../codex/SUNO_Youtube_Pipeline_First_Wave_Ticket_Board.md",
       "../codex/SUNO_Downloader_Competitive_Capability_Gap_Analysis.md"
@@ -893,13 +895,13 @@
   {
     "id": "AEGIS-SEARCH-001",
     "title": "Expand core Vault search across title, handle, tags, styles, and lyrics",
-    "status": "Ready",
+    "status": "Done",
     "priority": "P1",
     "size": "M",
     "owner": "Web App",
     "stream": "Vault UX",
     "summary": "Make the primary Vault search box match title, account handle, tags, styles, and lyrics text with better empty-state guidance and result visibility.",
-    "notes": "This is the first search ticket under EPIC-20. It should widen the current search from title-first matching into a real retrieval tool without requiring users to understand the catalog schema first.",
+    "notes": "Completed on 2026-05-16. The main Vault retrieval box now searches lyrics in addition to title, account handle, tags, and styles, and the live lyric-search pass was used to locate Vanessa songs containing terms like `snake` and `snakes` directly from the production catalog.",
     "sources": [
       "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md",
       "../../suno-viewer/src/components/VaultGrid.tsx"
@@ -914,7 +916,7 @@
     "owner": "Web App + Product",
     "stream": "Vault UX",
     "summary": "Add structured filters for account, publish state, removed status, lyrics/artifact availability, and style/tag narrowing without resetting the main search term.",
-    "notes": "This turns the Vault from a single search box into a workable retrieval surface. Active filters should remain visible, removable, and combinable so large catalogs can be narrowed deliberately. On 2026-04-12 the Vault shell split the search row from the control row and added the first catalog-mode controls, so this ticket now owns tightening those controls into a clearer structured retrieval band.",
+    "notes": "This turns the Vault from a single search box into a workable retrieval surface. Active filters should remain visible, removable, and combinable so large catalogs can be narrowed deliberately. On 2026-04-12 the Vault shell split the search row from the control row and added the first catalog-mode controls, so this ticket now owns tightening those controls into a clearer structured retrieval band. First live slice shipped on 2026-05-17: lyrics-state and publish-state dropdowns are now live in production, and active chips now surface query, account, removed, lyrics, and publish narrowing with one-click clear. A second live narrowing slice shipped on 2026-06-15 on revision `suno-viewer-00184-ghq`: the retrieval band now includes a dedicated `Filter style or tag` field that narrows against `displayTags`, `tags`, `styles`, and `styleText` without consuming the main search box. Remaining work is cleaner mobile treatment and any future deeper facet design beyond the current text-driven style/tag narrowing.",
     "sources": [
       "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md",
       "../../suno-viewer/src/components/VaultGrid.tsx"
@@ -923,13 +925,13 @@
   {
     "id": "AEGIS-SEARCH-003",
     "title": "Add saved views for common Vault and operator retrieval workflows",
-    "status": "Backlog",
+    "status": "In Progress",
     "priority": "P2",
     "size": "M",
     "owner": "Product + Ops",
     "stream": "Vault UX",
     "summary": "Create reusable Vault views such as recent additions, removed from Suno, publish-ready, has lyrics, and metadata-incomplete.",
-    "notes": "Saved views should reduce repeated manual filtering for creators and operators and make search part of the production workflow instead of just browsing.",
+    "notes": "Saved views should reduce repeated manual filtering for creators and operators and make search part of the production workflow instead of just browsing. The first live slice shipped on 2026-06-15 on revision `suno-viewer-00188-cbm`: the desktop Vault retrieval band now exposes one-click quick views for `Newest arrivals`, `Publish ready`, `Has lyrics`, `Missing lyrics`, and `Published`, built directly on top of the structured retrieval controls already in production. Remaining work is deciding whether these become true durable presets, adding a removed-from-Suno/operator-repair view, and extending the interaction pattern more gracefully into compact/mobile layouts.",
     "sources": [
       "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
     ]
@@ -937,13 +939,13 @@
   {
     "id": "AEGIS-SEARCH-004",
     "title": "Improve Vault search relevance and match visibility",
-    "status": "Backlog",
+    "status": "In Progress",
     "priority": "P2",
     "size": "M",
     "owner": "Web App",
     "stream": "Vault UX",
     "summary": "Improve search ranking, exact-match prioritization, and matched-field visibility so users understand why results appear.",
-    "notes": "Later-phase search quality work should weight title matches over tags/styles/lyrics, support more intuitive ranking, and make the match reason visible in the result cards where practical.",
+    "notes": "Later-phase search quality work should weight title matches over tags/styles/lyrics, support more intuitive ranking, and make the match reason visible in the result cards where practical. Moved to In Progress on 2026-05-17 after the first visible relevance pass shipped to production: search results now surface `Matched on ...` context inside both Vault Grid cards and Music Catalog rows, including lyric excerpts when the query lands in lyrics text. Reconfirmed live on revision `suno-viewer-00179-vpv` after the production bundle mismatch was resolved. The first ranking pass then shipped on revision `suno-viewer-00180-ctx`: query-active retrieval now sorts by field-aware relevance first so exact title and account hits outrank broader style/tag/lyrics matches, with the manual sort acting as the tiebreaker. A second tuning pass shipped on 2026-06-15 on revision `suno-viewer-00189-mv2`: search now normalizes punctuation-heavy titles more gracefully, supports multi-token matching across fields such as account plus lyrics, and rejects misleading partial multi-token hits that only satisfy part of the user intent. Remaining work is live tuning against ambiguous catalog queries and deciding whether any explicit relevance controls should surface in the UI.",
     "sources": [
       "../codex/AEGIS_VAULT_SEARCH_TICKET_STACK_2026-04-10.md"
     ]
@@ -1022,6 +1024,23 @@
     ]
   },
   {
+    "id": "AEGIS-MOBILE-005",
+    "title": "Fix mobile Vault audio playback on handheld browsers",
+    "status": "Done",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Web App + Platform",
+    "stream": "Vault UX",
+    "summary": "Make Vault audio reliably playable on mobile browsers so signed-in users can actually listen to songs from the phone experience.",
+    "notes": "Opened on 2026-05-16 after live user verification that the current mobile phone experience still does not play any music even when desktop login and playback paths are healthy. Moved to In Progress on 2026-05-16 once the first live fix pass shipped a mobile-safe native audio fallback in the Vault player, avoiding the WaveSurfer-first path on handheld browsers where protected-asset fetches and WebAudio gesture policies were likely preventing playback. A second live fix pass shipped on 2026-05-16 after phone-recording review showed the grid-card Play button still depended on desktop focus mechanics, preventing the native player from mounting on handheld browsers. Completed on 2026-05-17 after live handheld retest confirmed the mobile Vault now both loads and plays audio correctly on the new domains.",
+    "sources": [
+      "../codex/AEGIS_TEST_MATRIX_2026-05-04.md",
+      "../../suno-viewer/src/components/VaultGrid.tsx",
+      "../../suno-viewer/src/components/AudioPlayer.tsx",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
     "id": "EPIC-21",
     "title": "Track edge cases and production anomalies",
     "status": "Ready",
@@ -1069,6 +1088,138 @@
       "../../suno-viewer/server.js",
       "../../suno-viewer/src/components/VaultGrid.tsx",
       "../../suno-viewer/src/components/AudioPlayer.tsx"
+    ]
+  },
+  {
+    "id": "AEGIS-HARVEST-001",
+    "title": "Keep published Vault catalog freshness aligned with live Firestore state",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Prevent the nightly harvest chain from leaving the live Vault export behind newer Firestore songs when media retries or long-running repair work delay catalog republish.",
+    "notes": "Opened on 2026-06-14 after the live Vault still showed June 10 as the newest visible song even though Firestore already contained newer June 11 and June 13 records. Investigation proved Cloud Scheduler was still firing daily and recent harvest runs were still republishing latest_catalog_wide.csv, but the published export stayed at 2441 rows while Firestore had already advanced. A manual rebuild_catalog.py run from Firestore on 2026-06-14 republished the export at 2451 rows with newest item 'Fire Does Not Ask Permission' from 2026-06-13T23:20:55.989Z. The first live fix shipped the same day by changing both the Cloud Run harvest entrypoint and the legacy daily_suno_job.sh helper so a zero-row delta manifest no longer exits before metadata enrichment and rebuild_catalog.py. The updated harvest image was rebuilt and redeployed to Cloud Run job generation 20, and a fresh manual execution was started after rollout. A second hardening pass shipped on 2026-06-14 in the viewer/admin layer: `/api/admin/overview` now emits an explicit `exportFreshness` status and the Control Center surfaces healthy/stale/mismatch/unavailable states with automated coverage in `suno-viewer/test/freshness-utils.test.js`. A follow-on pass the same day extended that summary with a `source_ahead` state by comparing newest Firestore song time against newest served export time, so the exact June 14 drift pattern now has a dedicated admin-side signal. A third repair pass was staged later on 2026-06-14 after residual missing-lyrics cards were still visible for older songs like the June 10 Omega Kernel variants: the SUNO repair path had been reading `metadata.prompt` as the primary lyrics source even though archived clip payloads in-repo show a separate top-level `lyrics` field. The local fix now prefers `clip.lyrics`, then `metadata.lyrics`, then `metadata.prompt`, and the Cloud Run entrypoint now also runs `backfill_lyrics_artifacts.py --missing-only` after enrichment so repaired lyric text gets TXT/VTT/JSON artifacts before the next catalog rebuild. On 2026-06-14/15 the viewer also shipped a narrow duplicate-shadow suppression pass and was redeployed live on revision `suno-viewer-00183-f55`, which prevents stale lyricless rows from surfacing when a same-title, same-account, same-day lyric-bearing sibling already exists. Live Firestore verification after that deploy showed the remaining residual lyrics pocket bounded at 64 records. A later June 15 recount improved that again to 47 remaining `lyricsStatus = MISSING` rows, while canonical export freshness advanced to `generatedAt: 2026-06-15T08:51:02Z` with `2456` rows and newest served/source song time `2026-06-14T19:52:17.658Z`. A fresh authenticated manual harvest execution `suno-harvest-jx9ln` was then started on 2026-06-15 to test whether that older residual pocket shrinks further without manual surgery. On 2026-06-16/17 a separate root-cause pass proved the nightly harvest had not actually stopped: Cloud Scheduler `suno-harvest-nightly` stayed enabled, recent Cloud Run executions still completed, and the canonical export was still rebuilding successfully. The real blind spot was the monitor classification. It treated a fresh rebuild of unchanged source data as `healthy`, which meant the product could look stalled for multiple days without tripping the operational alarm if SUNO content creation paused or source freshness stopped advancing materially. Live Firestore verification during that pass showed the latest `sunoSongs.createdAt` was still `2026-06-14T19:52:17.658Z` while `lastSeenAt` was still moving, proving harvest scans were active but source content age had drifted past 57 hours. A permanent hardening patch was then shipped in `yt-ingest/pipeline_monitor.py` and covered by `yt-ingest/validate_pipeline_monitor_status.py`: post-harvest status now separately classifies `source_idle` and `source_scan_stale`, includes source freshness in the written summary and digest, and only suppresses post-harvest email when source content freshness, source scan freshness, catalog freshness, and queue health are all actually green. The updated harvest image was redeployed live to Cloud Run job generation 21. On 2026-06-17 the viewer then shipped the matching customer-facing transparency fix: `freshness-utils.js` now emits `source_idle` when the export matches source but the source content itself is older than threshold, `server.js` exposes that summary through `/api/vault/freshness`, and `VaultGrid.tsx` renders a visible banner on both `sundrop.cloud/vault` and `sundrop.music/vault` explaining that the Vault is synced but the latest source song is old. That viewer pass was validated by automated freshness tests, production build, and live browser verification after deploy on revision `suno-viewer-00192-bm8`. On 2026-06-17 a follow-up proof using the live public Suno profile API showed this was no longer just an upstream drought: `https://studio-api.prod.suno.com/api/profiles/unshakableechos2341` was already returning newer June 15 clips such as `Fire Does Not Ask Permission` (`2026-06-15T04:42:36.632Z`) and `RAMPAGE KILL BILL STYLE` (`2026-06-15T04:26:28.455Z`), while the Vault/Firestore/export still stopped at June 14. That narrowed the failure path to source selection rather than clip-detail fetch. In response, `yt-ingest/catalog_sync_firestore_multi.py` was hardened so the paid/beta fallback floor now always includes `unshakableechos2341`, `genxdreams`, and `gravitystruth`, and any live Firestore registry result is merged with that floor instead of silently replacing it. The script now also records `registry_warning` and `fallback_injected` in `delta_report.json`, and a focused regression test (`yt-ingest/test_catalog_sync_sources.py`) covers the merge behavior. On 2026-06-18 the next production proof established the deeper GenX incident shape: public Suno for `genxdreams` was already ahead into May, while the published catalog still had GenX frozen at April 7; direct Firestore `sources` inspection showed the live registry was missing `genxdreams` entirely; and although a hardened harvest image had been built on June 18, the Cloud Run job itself had not yet been updated and was still running the older spec. The job was manually updated to generation 22 and a patched manual execution `suno-harvest-cmldj` was started on image digest `sha256:51006371339b66196c97d9af8923c1d13f122bb86309b2ccf09b493046d71afd`. Live execution logs from that run already prove the repaired lane is active: `genxdreams: 32 delta rows (new=19, missing_gcs=9, metadata_repairs=4)`, multiple GenX media objects are being written under `gs://aeonimus-suno-media/suno/handles/genxdreams/`, and direct Firestore spot-check confirms missing May songs such as `Sold for Roses` (`f7ea9223-02d8-4b6b-a2e0-24f2d05b2bf6`, `2026-05-07T16:36:19.107Z`) are now landing again. Remaining work is to let that execution finish and then verify the canonical export and visible Vault advance for GenX as well as Vanessa.",
+    "sources": [
+      "../codex/AEGIS_TEST_MATRIX_2026-05-04.md",
+      "../../daily_suno_job.sh",
+      "../../yt-ingest/rebuild_catalog.py",
+      "../../suno-viewer/server.js"
+    ]
+  },
+  {
+    "id": "AEGIS-HARVEST-002",
+    "title": "Make the Firestore source registry the sole nightly harvest authority",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform",
+    "stream": "Reliability",
+    "summary": "Harvest every active, enabled SUNO source while excluding archived customer accounts without fallback reinjection.",
+    "notes": "Completed on 2026-08-18. Generation 39 contains no persistent HARVEST_HANDLE or HARVEST_HANDLES filter. Registry read failure or an empty active registry stops the run before source or removal mutation. All-account run suno-harvest-67wdf used the active registry only and completed successfully without retry.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SOURCE_RELIABILITY_STATUS_2026-08-17.md",
+      "../../yt-ingest/catalog_sync_firestore_multi.py"
+    ]
+  },
+  {
+    "id": "AEGIS-HARVEST-003",
+    "title": "Persist authoritative source health and partial-library state",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform + Product",
+    "stream": "Reliability",
+    "summary": "Track source mode, authorization health, latest authoritative item, scan time, and blocked or partial status for each account.",
+    "notes": "Harvest now persists source health and partial-source classification. Remaining work is to show authoritative source mode, latest item, scan time, and partial or blocked state on customer and admin surfaces.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SOURCE_RELIABILITY_STATUS_2026-08-17.md"
+    ]
+  },
+  {
+    "id": "AEGIS-HARVEST-004",
+    "title": "Implement supported private SUNO library ingestion",
+    "status": "Blocked",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform + Security",
+    "stream": "Reliability",
+    "summary": "Connect private or link-only customer libraries only through a supported consented Suno API or official export path.",
+    "notes": "No password storage, cookie extraction, or browser-session scraping. Accounts without supported authority stay visibly partial rather than falsely current.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SOURCE_RELIABILITY_STATUS_2026-08-17.md"
+    ]
+  },
+  {
+    "id": "AEGIS-D006",
+    "title": "Make full account exports durable, resumable, and account-scoped",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Platform + Web App",
+    "stream": "Downloader",
+    "summary": "Replace hanging package preparation with persisted job state, progress heartbeat, checksum verification, resumable uploads, and explicit terminal outcomes.",
+    "notes": "Each account package remains separate and the manifest lists unavailable assets with their reason. Durable checkpointing, retry-bounded uploads, and verified object reuse shipped in viewer revision 209. Revision `suno-viewer-00212-7zs` now uses a ten-day package window and upgrades older one-day package records when read, preventing a completed package from disappearing at the former 24-hour boundary. Remaining acceptance work: real signed-in full package download for unshakableechos2341 and nessihenize, including every ZIP part.",
+    "sources": [
+      "../codex/AEGIS_LOCAL_CATALOG_EXPORT_2026-04-15.md",
+      "../../suno-viewer/export-utils.js"
+    ]
+  },
+  {
+    "id": "AEGIS-REL-001",
+    "title": "Add nightly harvest and export operational alerts",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Platform + Ops",
+    "stream": "Reliability",
+    "summary": "Alert on source-read failure, stale source scan, skipped removal update, failed scheduled startup, and stuck export package.",
+    "notes": "The monitor now emits partial-harvest state, catalog age, and queue error count. Remaining work is an explicit stuck-package alert and an account-level alert summary that identifies healthy, partial, blocked, or failed publication.",
+    "sources": [
+      "../codex/AEGIS_VAULT_SOURCE_RELIABILITY_STATUS_2026-08-17.md",
+      "../../yt-ingest/pipeline_monitor.py"
+    ]
+  },
+  {
+    "id": "AEGIS-LOCAL-AUTH-001",
+    "title": "Remove personal Google sign-in dependency from local SUNO mirror",
+    "status": "Done",
+    "priority": "P0",
+    "size": "M",
+    "owner": "Download Vanessa SUNO vault copies",
+    "stream": "Local mirror reliability",
+    "summary": "Installed keyless read-only machine authentication on suno-viewer-00220-nic; DPAPI protected local client and ten-minute token renewal replace personal Google login in daily maintenance.",
+    "notes": "Four local and five broker tests pass. Live catalog and both-account audio/lyrics reads plus two forced token renewals passed with personal credential locations disabled; unrelated-account media denied 403. Daily automation updated. Nightly cloud jobs unchanged. This verifies authentication, not complete media recovery.",
+    "sources": [
+      "docs/codex/SUNDROP_LOCAL_MIRROR_MACHINE_AUTH_20260920.md"
+    ]
+  },
+  {
+    "id": "AEGIS-POST-HARVEST-AUDIO-GAPS-20260922",
+    "title": "Replace screenshot polling with conditional post-harvest audio gap check",
+    "status": "In Progress",
+    "priority": "P1",
+    "size": "S",
+    "owner": "Harvest task 01a0b137-deed-7ac2-8f0f-14abf26883bf",
+    "stream": "SUNO Harvest",
+    "summary": "Replace standalone polling with Harvest-completion-triggered gap reconciliation AND local Windows mirror, plus explicit one-off.",
+    "notes": "Five focused tests passed. Checks only15 known gaps after publication; unchanged assets never downloaded/decoded. Cloud Run metadata identity only. Production rollout pending narrow overlay onto verified current image; do not deploy unrelated dirty checkout. Native-source gaps remain unresolved. September23 scope correction: durable completion/run-ID queue, offline pending retention, idempotent Windows machine-auth full sync, preservation/evidence lock and explicit one-off acceptance required. check_daily.py is discovery only. Full delivery remains unimplemented and unverified; no live integration claim. Both standalone agent automations removed (local daily deletion reported by local owner).",
+    "sources": [
+      "../codex/POST_HARVEST_AUDIO_GAPS_20260922.md"
+    ]
+  },
+  {
+    "id": "AEGIS-LOCAL-MIRROR-002",
+    "title": "Harvest completion to verified local copies",
+    "status": "In Progress",
+    "priority": "P0",
+    "size": "L",
+    "owner": "Cadence",
+    "stream": "Harvest and local preservation",
+    "summary": "Durable harvest receipts, offline Windows receiver, explicit one-off and preserved local library integration.",
+    "notes": "Thomas assigned Cadence ownership until he changes it. No 9 AM automation. 2026-10-15 bounded product-code checkpoint: exact installed receiver was stopped and its task/config/queue preserved, then runtime versions/20261015-derived-provenance-held promoted in permanent --observe-only mode. Task Running, PID 6292, two advancing observations verified all case-write, receiver-processing, evidence-dispatch and sync-API flags false; queue files and PAUSED hold hashes unchanged. Candidate runtime passed 48 offline tests, including derivative provenance and hold guards. Receipt: E:/_Vanessa sux/___Divorce/_SUNO/Vanessa-Vault-decbb81b0b4a344b/runtime/promotion-20261015-derived-hold/observer-promotion-receipt.json. This activates observation only, not master integration or evidence acceptance. Cadence coordinator owns exact 40-song integration after bounded Steward/VP release; Anchor owns canonical registration/acceptance. Preserve the 33 remaining native audio gaps and historical inventory gaps separately. See tools/local-mirror/RUNTIME_PROMOTION_20261015.md and HISTORICAL_DERIVED_INTEGRATION.md. Parent outcome remains In Progress. 2026-10-16 library-only release implementation prepared: Thomas authorized E library updates for both Vanessa accounts while evidence dispatch stays held. receiver --library-only suppresses publish/tagging/ack, advances the current catalog watermark, and safely skips verified older receipts. state/library-health.json separates current absent/download failures from historical gap rows. 56 offline tests pass. Activation pending coordinator current sync completion; no task activation or master/evidence writes by local_sync. Exact activation, watermark seed and rollback: tools/local-mirror/LIBRARY_ONLY_ACTIVATION_20261016.md.",
+    "sources": [
+      "../codex/SUNDROP_HARVEST_LOCAL_MIRROR_20260928.md"
     ]
   }
 ]

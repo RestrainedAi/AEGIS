@@ -1,0 +1,3302 @@
+[
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81605c000adbd5e1169b94",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:01:48.721065187Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "=== Aeonimus Harvest Job | 20260816T070148Z | Mode: delta ===",
+    "timestamp": "2026-08-16T07:01:48.711637Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81605f0005b7cdf39b74cb",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:01:51.383702125Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "Auth OK: stable-framing-482501-t9",
+    "timestamp": "2026-08-16T07:01:51.374733Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81605f0006493a458c87cd",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:01:51.715160260Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "[STEP 1] Running multi-handle delta check...",
+    "timestamp": "2026-08-16T07:01:51.411962Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81605f0006494aef5e5df9",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:01:51.715160260Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [attempt 1/2] catalog_sync_firestore_multi",
+    "timestamp": "2026-08-16T07:01:51.411978Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81605f000a1f2cbd90490e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstderr",
+    "receiveTimestamp": "2026-08-16T07:01:51.671858370Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] Source registry was missing expected handles; injecting fallback coverage for: genxdreams",
+    "timestamp": "2026-08-16T07:01:51.663340Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81606d0002bf88285e1f7e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstderr",
+    "receiveTimestamp": "2026-08-16T07:02:05.186729560Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] Could not fetch clip cb39738d-5e3a-412e-bbd2-63f2d65b5ee0: HTTP Error 404: Not Found",
+    "timestamp": "2026-08-16T07:02:05.180104Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a81606d0007ca1ce10df97b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstderr",
+    "receiveTimestamp": "2026-08-16T07:02:05.517989612Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] Could not fetch clip e6378018-0da1-4efa-9695-b0e18b42f57e: HTTP Error 404: Not Found",
+    "timestamp": "2026-08-16T07:02:05.510492Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a816072000a2ae89041fe7e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstderr",
+    "receiveTimestamp": "2026-08-16T07:02:10.847002040Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] Could not fetch clip 0c532db2-9462-49a7-a02d-e61b52b27b29: HTTP Error 404: Not Found",
+    "timestamp": "2026-08-16T07:02:10.666344Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a816072000f264e5a049767",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstderr",
+    "receiveTimestamp": "2026-08-16T07:02:11.181359257Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] Could not fetch clip 11aa57e7-2958-41d5-b368-22134dd35569: HTTP Error 404: Not Found",
+    "timestamp": "2026-08-16T07:02:10.992846Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628baf2cf1c4f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "[2026-08-16T07:01:51.518468+00:00] catalog_sync_firestore_multi.py starting",
+    "timestamp": "2026-08-16T07:03:49.403642Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628d182d294df",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Auth    : OK",
+    "timestamp": "2026-08-16T07:03:49.403665Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628d6bf62ebf2",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Source registry: 3 active SUNO source(s)",
+    "timestamp": "2026-08-16T07:03:49.403670Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628da5a910e8b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Handles : 4",
+    "timestamp": "2026-08-16T07:03:49.403674Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628de69bea714",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "============================================================",
+    "timestamp": "2026-08-16T07:03:49.403678Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628e39e8906de",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Handle   : genxdreams",
+    "timestamp": "2026-08-16T07:03:49.403683Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628e68180ff55",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  SourceID : suno_genxdreams",
+    "timestamp": "2026-08-16T07:03:49.403686Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628e9313a75ac",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "============================================================",
+    "timestamp": "2026-08-16T07:03:49.403689Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628ed1faced1e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [1/3] Fetching live clip IDs from Suno API...",
+    "timestamp": "2026-08-16T07:03:49.403693Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628f1b1974a82",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Suno live count : 0",
+    "timestamp": "2026-08-16T07:03:49.403697Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628f59f1c506f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [2/3] Fetching Firestore records via REST...",
+    "timestamp": "2026-08-16T07:03:49.403701Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628f863081ccc",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.417365350Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Firestore count : 221",
+    "timestamp": "2026-08-16T07:03:49.403704Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628fc9c5e345a",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Marking 221 removed clip(s) in Firestore...",
+    "timestamp": "2026-08-16T07:03:49.403708Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000628ff426f37e9",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Marked 221/221 as removed_from_suno",
+    "timestamp": "2026-08-16T07:03:49.403711Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006290335fffd63",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    New: 0  |  Removed: 221  |  Common: 0",
+    "timestamp": "2026-08-16T07:03:49.403715Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062907a55841ed",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [3/3] Bulk GCS listing for genxdreams...",
+    "timestamp": "2026-08-16T07:03:49.403719Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006290b0ff0dec9",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 0c091fa4-0cbd-469c-8f12-40217cbc383b.jpg",
+    "timestamp": "2026-08-16T07:03:49.403723Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006290ec3895820",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 0c091fa4-0cbd-469c-8f12-40217cbc383b.mp4",
+    "timestamp": "2026-08-16T07:03:49.403726Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062912f1483328",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 11a705cc-b080-4288-9ebc-bb82bd9dc6c6.jpg",
+    "timestamp": "2026-08-16T07:03:49.403730Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062915aa618e5c",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 11a705cc-b080-4288-9ebc-bb82bd9dc6c6.mp4",
+    "timestamp": "2026-08-16T07:03:49.403733Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062919a57f6309",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 21d175b2-6bf7-4af6-a836-07251d50b993.jpg",
+    "timestamp": "2026-08-16T07:03:49.403737Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006291d73e60634",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 21d175b2-6bf7-4af6-a836-07251d50b993.mp4",
+    "timestamp": "2026-08-16T07:03:49.403741Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629204cf4958f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 22fbd191-13a5-4619-848c-93e85572b3bc.jpg",
+    "timestamp": "2026-08-16T07:03:49.403744Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629241860b77c",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 22fbd191-13a5-4619-848c-93e85572b3bc.mp4",
+    "timestamp": "2026-08-16T07:03:49.403748Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062927485c7ac4",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 2545edba-471e-4bad-94c7-9ec20aec737c.mp4",
+    "timestamp": "2026-08-16T07:03:49.403751Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006292b117024e2",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 28c9a85a-77f7-4a58-a1af-59669d336e34.jpg",
+    "timestamp": "2026-08-16T07:03:49.403755Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006292e24810b2f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 28c9a85a-77f7-4a58-a1af-59669d336e34.mp4",
+    "timestamp": "2026-08-16T07:03:49.403758Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006293262f3c0f6",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 2ecb1aae-213f-40c6-916f-4105cab15669.mp4",
+    "timestamp": "2026-08-16T07:03:49.403762Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006293567ceae8b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 307bf903-482b-4a90-8691-d18f12cd0837.mp4",
+    "timestamp": "2026-08-16T07:03:49.403765Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062938207089db",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 36580729-53dd-4128-b234-27e586cd0c3d.mp4",
+    "timestamp": "2026-08-16T07:03:49.403768Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006293cd5d17d3e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 3a303778-b164-4a7f-b4ce-8871c7820cfd.mp4",
+    "timestamp": "2026-08-16T07:03:49.403772Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062940e109454f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 423340cc-440c-45e4-a04f-fb92266cf09d.jpg",
+    "timestamp": "2026-08-16T07:03:49.403776Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629432e0b9410",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 423340cc-440c-45e4-a04f-fb92266cf09d.mp4",
+    "timestamp": "2026-08-16T07:03:49.403779Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062947e4ea8f60",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 45c3df58-777f-4126-8c00-eba9ef7395f4.jpg",
+    "timestamp": "2026-08-16T07:03:49.403783Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006294b442bbb7e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 45c3df58-777f-4126-8c00-eba9ef7395f4.mp4",
+    "timestamp": "2026-08-16T07:03:49.403787Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006294e3b456fb9",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 4a70a9a1-faef-41c9-ac44-ecb2fc25fc34.jpg",
+    "timestamp": "2026-08-16T07:03:49.403790Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062952ff26f818",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 58ed61e4-e63f-42eb-9897-f428153dc692.jpg",
+    "timestamp": "2026-08-16T07:03:49.403794Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629553cf8dcab",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 58ed61e4-e63f-42eb-9897-f428153dc692.mp4",
+    "timestamp": "2026-08-16T07:03:49.403797Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006295951a41a76",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 6a3e63c6-1e0d-4558-a5f7-01705b229ee3.jpg",
+    "timestamp": "2026-08-16T07:03:49.403801Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006295c1c844d61",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 6a3e63c6-1e0d-4558-a5f7-01705b229ee3.mp4",
+    "timestamp": "2026-08-16T07:03:49.403804Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006296020f99f9d",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 6ed3be0a-46ea-4776-aa83-08174fc3ef5e.mp4",
+    "timestamp": "2026-08-16T07:03:49.403808Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062963bf1c817b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 7b4be193-8b73-4d24-908c-a3ed4b55282b.mp4",
+    "timestamp": "2026-08-16T07:03:49.403811Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629672d26b8e7",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 7d92bb8c-5a83-4201-a86a-f2e2d5bce7a4.mp4",
+    "timestamp": "2026-08-16T07:03:49.403815Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006296a89e60b76",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 81487012-c777-4760-ad1a-c9d815456830.jpg",
+    "timestamp": "2026-08-16T07:03:49.403818Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006296dd251cdd8",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 8190292c-2a00-4fae-8bfc-c105a4dc467f.mp4",
+    "timestamp": "2026-08-16T07:03:49.403821Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062971fd8f4c7b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 8273c98c-a99d-4b87-bfe9-917c44158972.jpg",
+    "timestamp": "2026-08-16T07:03:49.403825Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062974c8aa68d6",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 8273c98c-a99d-4b87-bfe9-917c44158972.mp4",
+    "timestamp": "2026-08-16T07:03:49.403828Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006297773edd0b2",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 9675fca4-eddd-4108-845b-2998bd24586f.mp4",
+    "timestamp": "2026-08-16T07:03:49.403831Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006297be7d64b2b",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 99fc18f1-b79d-4299-87b2-1cd06316078c.jpg",
+    "timestamp": "2026-08-16T07:03:49.403835Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629806044adf6",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 99fc18f1-b79d-4299-87b2-1cd06316078c.mp4",
+    "timestamp": "2026-08-16T07:03:49.403840Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006298411485f35",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 9e70762d-d1a6-4dba-9f5b-1449eea1ab6c.jpg",
+    "timestamp": "2026-08-16T07:03:49.403844Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062989428fc757",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: 9e70762d-d1a6-4dba-9f5b-1449eea1ab6c.mp4",
+    "timestamp": "2026-08-16T07:03:49.403849Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006298d6a1698b4",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: a27a3328-29a2-4796-969a-2cb24c825a8e.jpg",
+    "timestamp": "2026-08-16T07:03:49.403853Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062991364d47de",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: a27a3328-29a2-4796-969a-2cb24c825a8e.mp4",
+    "timestamp": "2026-08-16T07:03:49.403857Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629961d4372c5",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: c9b0c985-a6f8-4eee-8189-9ce6d6ed48b7.jpg",
+    "timestamp": "2026-08-16T07:03:49.403862Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006299a718a0b03",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: c9b0c985-a6f8-4eee-8189-9ce6d6ed48b7.mp4",
+    "timestamp": "2026-08-16T07:03:49.403866Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d50006299fca798a37",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: d243b727-25ed-454d-9cda-617c3a173104.mp4",
+    "timestamp": "2026-08-16T07:03:49.403871Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629a364773b86",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: d409f824-f14d-4640-a8a3-7ddd1e69f12c.mp4",
+    "timestamp": "2026-08-16T07:03:49.403875Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629b274c39cd6",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: dbfdd5bf-3f9b-4fb5-8e5b-8b338b0a3845.jpg",
+    "timestamp": "2026-08-16T07:03:49.403890Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629b756b09b0a",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: dbfdd5bf-3f9b-4fb5-8e5b-8b338b0a3845.mp4",
+    "timestamp": "2026-08-16T07:03:49.403895Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629bc8ae3aa21",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: ead2050b-a55a-414c-9200-4635476eb5e9.mp4",
+    "timestamp": "2026-08-16T07:03:49.403900Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629c19e218082",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: edda4698-7c29-4e86-9f3a-d083d7d555f0.jpg",
+    "timestamp": "2026-08-16T07:03:49.403905Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629c6f262f991",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: edda4698-7c29-4e86-9f3a-d083d7d555f0.mp4",
+    "timestamp": "2026-08-16T07:03:49.403910Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629cbffb100e9",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: ee476ba0-cbe6-4b08-9f19-8b7f04612a8d.jpg",
+    "timestamp": "2026-08-16T07:03:49.403915Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629d04e02f7c6",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: ee476ba0-cbe6-4b08-9f19-8b7f04612a8d.mp4",
+    "timestamp": "2026-08-16T07:03:49.403920Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629d4c80079eb",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: f032ae2e-1696-4311-936b-322d714dbb38.jpg",
+    "timestamp": "2026-08-16T07:03:49.403924Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629d9f9173359",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [WARN] 0-byte file detected, treating as missing: fec7a80c-d9ba-4778-9911-0056c30f3317.mp4",
+    "timestamp": "2026-08-16T07:03:49.403929Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629dfdb11f58f",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    GCS objects found: 612",
+    "timestamp": "2026-08-16T07:03:49.403935Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629e425e25223",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    GCS gaps : 0",
+    "timestamp": "2026-08-16T07:03:49.403940Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629e90c45b6d8",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Metadata repairs : 0",
+    "timestamp": "2026-08-16T07:03:49.403945Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629ee1131759e",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Delta rows for genxdreams: 0",
+    "timestamp": "2026-08-16T07:03:49.403950Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629f4712abce7",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "============================================================",
+    "timestamp": "2026-08-16T07:03:49.403956Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629f90de17684",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Handle   : gravitystruth",
+    "timestamp": "2026-08-16T07:03:49.403961Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d5000629fe64b39648",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  SourceID : suno_gravitystruth",
+    "timestamp": "2026-08-16T07:03:49.403966Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a026e667fca",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "============================================================",
+    "timestamp": "2026-08-16T07:03:49.403970Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a05593bc1eb",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [1/3] Fetching live clip IDs from Suno API...",
+    "timestamp": "2026-08-16T07:03:49.403973Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a09c43b8a25",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Suno live count : 9",
+    "timestamp": "2026-08-16T07:03:49.403977Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a0d85f3f607",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [2/3] Fetching Firestore records via REST...",
+    "timestamp": "2026-08-16T07:03:49.403981Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a117392d355",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Firestore count : 9",
+    "timestamp": "2026-08-16T07:03:49.403985Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a165b4f0a23",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    New: 0  |  Removed: 0  |  Common: 9",
+    "timestamp": "2026-08-16T07:03:49.403990Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a1b5f121a04",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  [3/3] Bulk GCS listing for gravitystruth...",
+    "timestamp": "2026-08-16T07:03:49.403995Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a21fcccdb99",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    GCS objects found: 25",
+    "timestamp": "2026-08-16T07:03:49.404001Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a26c8d3ca25",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    GCS gaps : 2",
+    "timestamp": "2026-08-16T07:03:49.404006Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a2b78f70796",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    Metadata repairs : 2",
+    "timestamp": "2026-08-16T07:03:49.404011Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a309db2a08a",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    [GCS_MISSING:mp4] cb39738d-5e3a-412e-bbd2-63f2d65b5ee0",
+    "timestamp": "2026-08-16T07:03:49.404016Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a3508019934",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    [GCS_MISSING:mp4] e6378018-0da1-4efa-9695-b0e18b42f57e",
+    "timestamp": "2026-08-16T07:03:49.404021Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a3aa87049ff",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    [METADATA_REPAIR] cb39738d-5e3a-412e-bbd2-63f2d65b5ee0",
+    "timestamp": "2026-08-16T07:03:49.404026Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a3f31795d9d",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "    [METADATA_REPAIR] e6378018-0da1-4efa-9695-b0e18b42f57e",
+    "timestamp": "2026-08-16T07:03:49.404031Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a43818026f5",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Delta rows for gravitystruth: 4",
+    "timestamp": "2026-08-16T07:03:49.404035Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a49957dabcc",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "============================================================",
+    "timestamp": "2026-08-16T07:03:49.404041Z"
+  },
+  {
+    "apphub": {
+      "application": {
+        "container": "projects/stable-framing-482501-t9",
+        "id": "sundrop",
+        "location": "global"
+      },
+      "workload": {
+        "criticalityType": "TYPE_UNSPECIFIED",
+        "environmentType": "TYPE_UNSPECIFIED",
+        "id": "suno-harvest-dada-27ad51800db0"
+      }
+    },
+    "insertId": "6a8160d500062a4e448f14cd",
+    "labels": {
+      "instanceId": "001548f72982b4b373be2ed4d2b40a50607594ee6dd0e7647bb9fc8e5131474f62b057ad93788d248c3549d4d8711820a7d4155a6eda89520ed22ab7666cd118eeeee5320c2c8e316d3527fa04339c8bba96a877cb120f379e17c4",
+      "run.googleapis.com/execution_name": "suno-harvest-p2w9j",
+      "run.googleapis.com/task_attempt": "0",
+      "run.googleapis.com/task_index": "0"
+    },
+    "logName": "projects/stable-framing-482501-t9/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2026-08-16T07:03:49.749608527Z",
+    "resource": {
+      "labels": {
+        "job_name": "suno-harvest",
+        "location": "us-central1",
+        "project_id": "stable-framing-482501-t9"
+      },
+      "type": "cloud_run_job"
+    },
+    "textPayload": "  Handle   : nessihenize",
+    "timestamp": "2026-08-16T07:03:49.404046Z"
+  }
+]

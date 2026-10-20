@@ -1,0 +1,87 @@
+{
+  "featureId": "harvest-freshness",
+  "title": "Harvest and Freshness Chain",
+  "module": "yt-ingest",
+  "deployPhase": "pre-deploy",
+  "scopeTicket": "AEGIS-006, AEGIS-009",
+  "wireframeRef": "docs/codex/AEGIS_TEST_MATRIX_2026-05-04.md#harvest-and-freshness-chain",
+  "steps": [
+    {
+      "id": "HF-01",
+      "title": "Catalog sync source merge unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python -m unittest test_catalog_sync_sources.py -v",
+      "onFail": {
+        "suggestions": [
+          "Review merge_tracked_handles() and filter_tracked_handles() in catalog_sync_firestore_multi.py",
+          "Ensure fallback floor includes expected SUNO handles"
+        ],
+        "fixCommands": ["cd yt-ingest", "python -m unittest test_catalog_sync_sources.py -v"]
+      }
+    },
+    {
+      "id": "HF-02",
+      "title": "Pipeline monitor status classification validator",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python validate_pipeline_monitor_status.py",
+      "onFail": {
+        "suggestions": [
+          "Inspect pipeline_monitor.build_status_summary thresholds",
+          "Confirm stale/healthy/partial_harvest classifications still match operator expectations"
+        ]
+      }
+    },
+    {
+      "id": "HF-03",
+      "title": "SUNO export contract mapping validator",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python validate_suno_export_contract.py",
+      "onFail": {
+        "suggestions": [
+          "Review rebuild_catalog.py FIELDNAMES and build_rows mapping",
+          "Update fixtures/suno_export_contract_fixture.json if contract intentionally changed"
+        ]
+      }
+    },
+    {
+      "id": "HF-04",
+      "title": "Export freshness helper unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --test test/freshness-utils.test.js",
+      "onFail": {
+        "suggestions": [
+          "Review suno-viewer/freshness-utils.js healthy/stale/mismatch logic",
+          "Align admin Control Center freshness copy with helper output"
+        ]
+      }
+    },
+    {
+      "id": "HF-05",
+      "title": "Harvest runtime shape verification (Cloud Run job config)",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File verify_harvest_runtime.ps1",
+      "requiresGcp": true,
+      "optional": true,
+      "onFail": {
+        "suggestions": [
+          "Run yt-ingest/redeploy_harvest.sh or run_nessihenize_catchup_harvest.ps1 deploy section",
+          "Verify suno-harvest env vars: PROJECT, WORK_DIR, HARVEST_MODE"
+        ],
+        "fixCommands": [
+          "cd yt-ingest",
+          "$env:VERIFY_ONLY='true'; bash redeploy_harvest.sh"
+        ]
+      }
+    }
+  ]
+}

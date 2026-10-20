@@ -13,9 +13,13 @@ Contract notes:
 
 import csv
 import json
+import socket
+import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
 
 from gcp_access_token import get_access_token
 
@@ -51,6 +55,9 @@ FIELDNAMES = [
     "commentsCount",
     "remixCount",
     "audio_url",
+    "audio_asset_role",
+    "audio_provenance_url",
+    "audio_original_url",
     "video_url",
     "image_url",
     "gcs_mp3",
@@ -69,9 +76,11 @@ FIELDNAMES = [
     "ytPublishedAt",
 ]
 
-HANDLE_ALIAS_MAP = {
-    "unshakableechos2341": "vanessa_primary",
-}
+from account_labels import (
+    HANDLE_ALIAS_MAP,
+    canonical_account_handle,
+    canonical_account_label,
+)
 
 
 def get_token():
@@ -226,13 +235,26 @@ def doc_to_row(doc, run_ts):
     text = {key: fval(value) for key, value in map_fields(fields.get("text")).items()}
     canonical_media = canonical_media_fields(flat, media)
     gcs_aliases = export_gcs_aliases(flat, canonical_media, gcs)
+    recovery = {key: fval(value) for key, value in map_fields(map_fields(fields.get("media")).get("audioRecovery")).items()}
+    recovery_selected = (
+        isinstance(recovery, dict)
+        and recovery.get("kind") == "derived-from-video"
+        and recovery.get("nativeOriginal") == "false"
+        and bool(recovery.get("derivedAudioUrl"))
+        and canonical_media["audio_url"] == recovery.get("derivedAudioUrl")
+    )
+    if recovery_selected:
+        # Preserve the native asset alias while exporting the explicitly selected
+        # listening copy for playback and current-audio consumers.
+        gcs_aliases["gcs_mp3"] = recovery.get("originalAudioUrl", "")
+        gcs_aliases["gcs_latest_audio"] = canonical_media["audio_url"]
 
     song_key = doc["name"].split("/")[-1]
     account_source_id = pick_first(flat.get("account_sourceId"), flat.get("sourceId"))
     raw_account_handle = pick_first(flat.get("account_handle"), flat.get("handle"))
-    account_handle = HANDLE_ALIAS_MAP.get(raw_account_handle, raw_account_handle)
+    account_handle = canonical_account_handle(raw_account_handle)
     raw_account_label = pick_first(flat.get("account_label"), raw_account_handle)
-    account_label = HANDLE_ALIAS_MAP.get(raw_account_label, raw_account_label)
+    account_label = canonical_account_label(raw_account_handle, raw_account_label)
     created_at = pick_first(flat.get("createdAt"), flat.get("created_at"))
     updated_at = pick_first(flat.get("updatedAt"), flat.get("indexedAt"), flat.get("importedAt"))
 
@@ -267,6 +289,9 @@ def doc_to_row(doc, run_ts):
         "commentsCount": normalize_inline_text(pick_first(flat.get("commentsCount"), "0")),
         "remixCount": normalize_inline_text(pick_first(flat.get("remixCount"), "0")),
         "audio_url": normalize_inline_text(canonical_media["audio_url"]),
+        "audio_asset_role": "derived-from-video" if recovery_selected else "",
+        "audio_provenance_url": normalize_inline_text(recovery.get("provenanceUrl", "")) if recovery_selected else "",
+        "audio_original_url": normalize_inline_text(recovery.get("originalAudioUrl", "")) if recovery_selected else "",
         "video_url": normalize_inline_text(canonical_media["video_url"]),
         "image_url": normalize_inline_text(canonical_media["image_url"]),
         "gcs_mp3": normalize_inline_text(gcs_aliases["gcs_mp3"]),
@@ -326,17 +351,49 @@ def upload_file(local_path, gs_uri, token, content_type):
     )
     with open(local_path, "rb") as fh:
         body = fh.read()
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": content_type,
-        },
-    )
-    with urllib.request.urlopen(req, timeout=60) as response:
-        response.read()
+    attempts = 4
+    backoff_seconds = 2
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        req = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": content_type,
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                response.read()
+            return
+        except HTTPError as error:
+            if error.code < 500 or attempt == attempts:
+                raise
+            last_error = error
+        except (URLError, ConnectionResetError, TimeoutError, socket.timeout) as error:
+            if attempt == attempts:
+                raise
+            last_error = error
+
+        wait_seconds = backoff_seconds * attempt
+        print(
+            f"[WARN] Upload attempt {attempt}/{attempts} failed for {gs_uri}: {last_error}. "
+            f"Retrying in {wait_seconds}s..."
+        )
+        time.sleep(wait_seconds)
+
+    if last_error:
+        raise last_error
+
+
+def safe_preview_text(value, limit=50):
+    text = str(value or "")
+    if not text:
+        return ""
+    text = text[:limit]
+    return text.encode("ascii", "replace").decode("ascii")
 
 
 def build_rows(docs, run_ts):
@@ -361,6 +418,17 @@ def main():
     print(f"Total docs: {len(docs)}")
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = build_rows(docs, run_ts)
+    raw_label_rows = [
+        row for row in rows
+        if row.get("account_label") in HANDLE_ALIAS_MAP
+        or row.get("account_handle") in HANDLE_ALIAS_MAP
+    ]
+    if raw_label_rows:
+        print(
+            f"[WARN] {len(raw_label_rows)} export rows still use raw handle labels; "
+            "re-run harvest upserts to normalize Firestore account_label fields.",
+            file=sys.stderr,
+        )
 
     with open(OUT_CSV, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=FIELDNAMES)
@@ -368,8 +436,8 @@ def main():
         writer.writerows(rows)
     print(f"Written {len(rows)} rows -> {OUT_CSV}")
     if rows:
-        print(f"  Newest: {rows[0]['createdAt'][:10]}  {rows[0]['title'][:50]}")
-        print(f"  Oldest: {rows[-1]['createdAt'][:10]}  {rows[-1]['title'][:50]}")
+        print(f"  Newest: {rows[0]['createdAt'][:10]}  {safe_preview_text(rows[0]['title'])}")
+        print(f"  Oldest: {rows[-1]['createdAt'][:10]}  {safe_preview_text(rows[-1]['title'])}")
 
     meta = build_meta(run_ts, len(rows))
     with open(OUT_META, "w", encoding="utf-8") as fh:

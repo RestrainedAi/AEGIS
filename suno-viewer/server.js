@@ -12,8 +12,19 @@ const { applicationDefault, getApps, initializeApp: initializeFirebaseApp } = re
 const { getAuth } = require("firebase-admin/auth");
 const branding = require("./branding.config.json");
 const tierCatalogConfig = require("./shared/tierCatalog.json");
+const { summarizeExportFreshness } = require("./freshness-utils");
+const {
+  DEFAULT_CATALOG_EXPORT_TTL_MS,
+  buildCatalogExportBaseFileName,
+  catalogExportScopeDetails,
+  hydrateCatalogExportParts,
+  migrateLegacyCatalogExportExpiry,
+} = require("./catalog-export-utils");
+const { artifactExists: artifactExistsWithFallback, buildCustomerManifestRow, hasArtifact } = require("./export-utils");
+const { normalizeStorageObjectReference } = require("./storage-object-reference");
 
 const app = express();
+require('./local-mirror-token.cjs').installLocalMirrorTokenRoute(app, { getAccessToken });
 const storage = new Storage();
 app.use(express.json());
 
@@ -25,16 +36,46 @@ const LOCAL_CATALOG_FALLBACK_CANDIDATES = [
   path.join(__dirname, "public", "catalog.csv"),
 ];
 const LOCAL_EXPORT_ROOT = path.join(os.tmpdir(), "aegis-catalog-exports");
-const EXPORT_TTL_MS = Number(process.env.CATALOG_EXPORT_TTL_MS || 24 * 60 * 60 * 1000);
+const EXPORT_JOB_PREFIX = "exports/catalog-jobs";
+const EXPORT_TTL_MS = Number(process.env.CATALOG_EXPORT_TTL_MS || DEFAULT_CATALOG_EXPORT_TTL_MS);
 const EXPORT_MAX_PART_BYTES = Number(process.env.CATALOG_EXPORT_MAX_PART_BYTES || 1.5 * 1024 * 1024 * 1024);
+const EXPORT_ASSET_METADATA_TIMEOUT_MS = Number(process.env.CATALOG_EXPORT_ASSET_METADATA_TIMEOUT_MS || 15000);
+const EXPORT_ASSET_DOWNLOAD_TIMEOUT_MS = Number(process.env.CATALOG_EXPORT_ASSET_DOWNLOAD_TIMEOUT_MS || 180000);
+const EXPORT_ROW_CONCURRENCY = Number(process.env.CATALOG_EXPORT_ROW_CONCURRENCY || 4);
+const EXPORT_BUILD_ROW_TIMEOUT_MS = Number(process.env.CATALOG_EXPORT_BUILD_ROW_TIMEOUT_MS || 90000);
+const EXPORT_BUILD_STEP_TIMEOUT_MS = Number(process.env.CATALOG_EXPORT_BUILD_STEP_TIMEOUT_MS || 10 * 60 * 1000);
+// Keep recovery beyond the upload deadline so a slow but still valid resumable
+// transfer cannot be rebuilt concurrently by a second worker.
+const EXPORT_ACTIVE_JOB_STALE_MS = Number(process.env.CATALOG_EXPORT_ACTIVE_JOB_STALE_MS || 30 * 60 * 1000);
+const EXPORT_RESUME_STALE_MS = Number(process.env.CATALOG_EXPORT_RESUME_STALE_MS || 30 * 60 * 1000);
+const EXPORT_ARTIFACT_RECHECK_MS = Number(process.env.CATALOG_EXPORT_ARTIFACT_RECHECK_MS || 30 * 1000);
+const EXPORT_HEARTBEAT_MS = Number(process.env.CATALOG_EXPORT_HEARTBEAT_MS || 30 * 1000);
+const EXPORT_STORAGE_RETRY_ATTEMPTS = Number(process.env.CATALOG_EXPORT_STORAGE_RETRY_ATTEMPTS || 4);
+const EXPORT_STORAGE_RETRY_BASE_DELAY_MS = Number(process.env.CATALOG_EXPORT_STORAGE_RETRY_BASE_DELAY_MS || 1500);
+const EXPORT_STORAGE_UPLOAD_TIMEOUT_MS = Number(
+  process.env.CATALOG_EXPORT_STORAGE_UPLOAD_TIMEOUT_MS || 20 * 60 * 1000
+);
+const EXPORT_STATE_PERSIST_MIN_INTERVAL_MS = Number(
+  process.env.CATALOG_EXPORT_STATE_PERSIST_MIN_INTERVAL_MS || 5000
+);
+const EXPORT_WRITER_VERSION = "2026-05-15-direct-manifest-v3";
 const PROJECT = "stable-framing-482501-t9";
 const DATABASE = "(default)";
 const QUEUE_COLLECTION = "ytUploadQueue";
 const SONG_COLLECTION = "sunoSongs";
+const SOURCES_COLLECTION = "sources";
+const SUNO_ACCOUNT_LABEL_ALIASES = {
+  unshakableechos2341: "vanessa_primary",
+  nessihenize: "vanessa_secondary",
+};
 const ACCESS_REQUEST_COLLECTION = "accessRequests";
 const APP_NAME = branding.productNames.cloud;
 const CLOUD_ORIGIN = String(branding.domains?.cloudOrigin || "").trim();
 const MUSIC_ORIGIN = String(branding.domains?.musicOrigin || "").trim();
+const LEGACY_APP_ORIGIN = String(process.env.LEGACY_APP_ORIGIN || "https://music.aeonimus.info").trim();
+const PUBLIC_APP_ORIGIN = String(
+  process.env.PUBLIC_APP_ORIGIN || CLOUD_ORIGIN || MUSIC_ORIGIN || LEGACY_APP_ORIGIN || ""
+).trim();
 const CLOUD_HOSTNAME = safeHostname(CLOUD_ORIGIN);
 const MUSIC_HOSTNAME = safeHostname(MUSIC_ORIGIN);
 const SUPPORT_EMAIL = "blahnikdigitaldesigns@gmail.com";
@@ -47,7 +88,7 @@ const LEGACY_WORKSPACE_ID = process.env.LEGACY_WORKSPACE_ID || branding.legacy.w
 const LEGACY_WORKSPACE_NAME = process.env.LEGACY_WORKSPACE_NAME || branding.productNames.legacyWorkspace;
 const INITIAL_APPROVED_EMAILS = String(
   process.env.INITIAL_APPROVED_EMAILS ||
-    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com"
+    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com,aegis@aeonimus.ai"
 )
   .split(",")
   .map((value) => value.trim().toLowerCase())
@@ -259,6 +300,143 @@ function byteLabel(bytes) {
   return `${scaled >= 10 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`;
 }
 
+function withTimeout(promise, timeoutMs, label) {
+  const effectiveTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+    ? Number(timeoutMs)
+    : 60_000;
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(effectiveTimeoutMs / 1000)}s`));
+    }, effectiveTimeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableCatalogExportStorageError(error) {
+  const statusCode = Number(error?.code || error?.statusCode || error?.status || 0);
+  if (statusCode === 408 || statusCode === 425 || statusCode === 429) {
+    return true;
+  }
+  if (statusCode >= 500) {
+    return true;
+  }
+
+  const code = String(error?.code || "").toUpperCase();
+  if ([
+    "ECONNRESET",
+    "ECONNABORTED",
+    "ETIMEDOUT",
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "EPIPE",
+    "UND_ERR_CONNECT_TIMEOUT",
+  ].includes(code)) {
+    return true;
+  }
+
+  const message = String(error?.message || error || "").toLowerCase();
+  return [
+    "socket hang up",
+    "timed out",
+    "timeout",
+    "connection reset",
+    "temporarily unavailable",
+    "service unavailable",
+    "internal error",
+    "tls",
+    "network",
+  ].some((fragment) => message.includes(fragment));
+}
+
+async function retryCatalogExportStorageOperation(label, operation) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= EXPORT_STORAGE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation(attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= EXPORT_STORAGE_RETRY_ATTEMPTS || !isRetryableCatalogExportStorageError(error)) {
+        throw error;
+      }
+      const delayMs = EXPORT_STORAGE_RETRY_BASE_DELAY_MS * attempt;
+      console.warn(`[catalog-export] ${label} failed on attempt ${attempt}/${EXPORT_STORAGE_RETRY_ATTEMPTS}; retrying in ${delayMs}ms: ${error?.message || error}`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastError || new Error(`${label} failed`);
+}
+
+function appendArchiveStream(archive, source, entryName, timeoutMs, label) {
+  const effectiveTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+    ? Number(timeoutMs)
+    : 60_000;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      archive.off("error", onError);
+      if (source && typeof source.off === "function") {
+        source.off("error", onError);
+      }
+    };
+
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    };
+
+    const onError = (error) => {
+      finish(error);
+    };
+
+    timer = setTimeout(() => {
+      const timeoutError = new Error(`${label} timed out after ${Math.round(effectiveTimeoutMs / 1000)}s`);
+      if (source && typeof source.destroy === "function") {
+        source.destroy(timeoutError);
+      }
+      finish(timeoutError);
+    }, effectiveTimeoutMs);
+
+    archive.on("error", onError);
+    if (source && typeof source.on === "function") {
+      source.on("error", onError);
+    }
+    if (source && typeof source.on === "function") {
+      finished(source).then(() => finish(), onError);
+    }
+
+    archive.append(source, { name: entryName });
+  });
+}
+
+async function downloadAssetBuffer(bucketName, objectName, timeoutMs, label) {
+  const file = storage.bucket(bucketName).file(objectName);
+  const [buffer] = await retryCatalogExportStorageOperation(
+    label,
+    () => withTimeout(
+      file.download(),
+      timeoutMs,
+      label
+    )
+  );
+  return buffer;
+}
+
 function buildExportFileStem(row) {
   const songKey = safeFilePart(row.songKey, crypto.randomBytes(4).toString("hex"));
   return songKey || crypto.randomBytes(4).toString("hex");
@@ -274,9 +452,10 @@ function manifestFileNameForPart(partName, kind) {
 
 function buildCatalogExportReadyEmail({ job, context, summary }) {
   const workspaceName = context?.activeWorkspace?.name || summary?.workspaceName || job.workspaceId;
+  const downloadsHref = `${PUBLIC_APP_ORIGIN || "https://music.aeonimus.info"}/vault?view=catalog&section=downloads`;
   const body = `
-    <p style="margin:0 0 18px;">Your local catalog package is ready to download from the Vault downloads panel.</p>
-    ${notificationList([
+  <p style="margin:0 0 18px;">Your local catalog package is ready to download from the Vault downloads panel.</p>
+  ${notificationList([
       { label: "Workspace", value: workspaceName },
       { label: "Rows", value: Number(job.totalRows || 0).toLocaleString() },
       { label: "Assets", value: Number(job.totalAssets || 0).toLocaleString() },
@@ -284,11 +463,11 @@ function buildCatalogExportReadyEmail({ job, context, summary }) {
       { label: "Package size", value: byteLabel(job.totalBytes || 0) },
       { label: "Missing assets", value: Number(job.missingAssets || 0).toLocaleString() },
       { label: "Expires", value: job.expiresAt || "" },
-    ])}
-    <p style="margin:18px 0 0;">
-      Open the Vault downloads panel here:
-      <a href="https://music.aeonimus.info/vault" style="color:#b7bbff;">https://music.aeonimus.info/vault</a>
-    </p>
+  ])}
+  <p style="margin:18px 0 0;">
+    Open the Vault downloads panel here:
+    <a href="${downloadsHref}" style="color:#b7bbff;">${downloadsHref}</a>
+  </p>
   `;
   return notificationShell({
     title: "Local catalog download ready",
@@ -297,18 +476,374 @@ function buildCatalogExportReadyEmail({ job, context, summary }) {
   });
 }
 
-function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid }) {
+function buildCatalogExportSignature({ workspaceId, songKeys, accountHandle = "" }) {
+  const normalizedKeys = Array.isArray(songKeys)
+    ? [...new Set(songKeys.map((value) => String(value || "").trim()).filter(Boolean))].sort()
+    : [];
+  return JSON.stringify({
+    workspaceId: String(workspaceId || "").trim(),
+    songKeys: normalizedKeys,
+    accountHandle: String(accountHandle || "").trim(),
+  });
+}
+
+function exportJobPrefix(exportId) {
+  return `${EXPORT_JOB_PREFIX}/${String(exportId || "").trim()}`;
+}
+
+function exportJobStateObject(exportId) {
+  return `${exportJobPrefix(exportId)}/job.json`;
+}
+
+function exportJobManifestObject(exportId) {
+  return `${exportJobPrefix(exportId)}/catalog.csv`;
+}
+
+function exportJobSummaryObject(exportId) {
+  return `${exportJobPrefix(exportId)}/summary.json`;
+}
+
+function exportJobPartObject(exportId, partName) {
+  return `${exportJobPrefix(exportId)}/parts/${path.basename(String(partName || "").trim())}`;
+}
+
+function buildCatalogExportStoredJob(job) {
+  return {
+    exportId: job.exportId,
+    workspaceId: job.workspaceId,
+    ownerUid: job.ownerUid,
+    requestedByUid: job.requestedByUid,
+    requestScope: job.requestScope || "catalog",
+    requestAccountHandle: job.requestAccountHandle || "",
+    requestSongKeys: Array.isArray(job.requestSongKeys) ? job.requestSongKeys : [],
+    requestSignature: job.requestSignature || "",
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    lastProgressAt: job.lastProgressAt || job.updatedAt || job.createdAt,
+    expiresAt: job.expiresAt,
+    phaseLabel: job.phaseLabel || "",
+    progressMessage: job.progressMessage || "",
+    stepCurrent: Number(job.stepCurrent || 0),
+    stepTotal: Number(job.stepTotal || 0),
+    currentPart: Number(job.currentPart || 0),
+    totalRows: Number(job.totalRows || 0),
+    totalAssets: Number(job.totalAssets || 0),
+    totalBytes: Number(job.totalBytes || 0),
+    missingAssets: Number(job.missingAssets || 0),
+    partCount: Number(job.partCount || 0),
+    parts: Array.isArray(job.parts)
+      ? job.parts.map((part) => ({
+          partName: part.partName,
+          fileName: part.fileName || part.partName,
+          rowCount: Number(part.rowCount || 0),
+          assetCount: Number(part.assetCount || 0),
+          estimatedBytes: Number(part.estimatedBytes || 0),
+          estimatedBytesLabel: part.estimatedBytesLabel || byteLabel(part.estimatedBytes || 0),
+          sizeBytes: Number(part.sizeBytes || 0),
+          sizeLabel: part.sizeLabel || byteLabel(part.sizeBytes || 0),
+          objectName: part.objectName || "",
+        }))
+      : [],
+    manifestObject: job.manifestObject || "",
+    summaryObject: job.summaryObject || "",
+    summary: job.summary || null,
+    error: job.error || "",
+  };
+}
+
+function catalogExportProgressTimestamp(job) {
+  const explicitProgressAt = Date.parse(job?.lastProgressAt || "");
+  if (explicitProgressAt) return explicitProgressAt;
+
+  // Jobs written before lastProgressAt existed used the heartbeat timestamp.
+  // For a legacy job parked in upload, that timestamp alone does not prove that
+  // bytes are moving, so use its creation time to allow safe recovery.
+  if (String(job?.phaseLabel || "").toLowerCase() === "uploading packages") {
+    return Date.parse(job?.createdAt || "");
+  }
+
+  return Date.parse(job?.updatedAt || job?.createdAt || "");
+}
+
+async function persistCatalogExportJob(job) {
+  if (!job?.exportId) return;
+  const payload = `${JSON.stringify(buildCatalogExportStoredJob(job), null, 2)}\n`;
+  await retryCatalogExportStorageOperation(
+    `Persisting job ${job.exportId}`,
+    () => storage.bucket(BUCKET).file(exportJobStateObject(job.exportId)).save(payload, {
+      contentType: "application/json",
+      resumable: false,
+      metadata: {
+        cacheControl: "private, max-age=0, no-store",
+      },
+    })
+  );
+}
+
+async function checkpointCatalogExportJob(job) {
+  if (!job?.exportId) return;
+  if (job._persistTimer) {
+    clearTimeout(job._persistTimer);
+    job._persistTimer = null;
+  }
+  // Do not let an older throttled snapshot overwrite a completed part. Every
+  // upload checkpoint waits for the prior write, then commits the newest state.
+  await Promise.resolve(job._persistPromise).catch(() => {});
+  const revision = Number(job._persistRevision || 0) + 1;
+  job._persistRevision = revision;
+  job._persistSnapshot = `${JSON.stringify(buildCatalogExportStoredJob(job), null, 2)}\n`;
+  const persistPromise = persistCatalogExportJob(job);
+  job._persistPromise = persistPromise;
+  await persistPromise;
+  job._persistCommittedRevision = revision;
+}
+
+function queueCatalogExportPersist(job) {
+  if (!job?.exportId) return;
+  const revision = Number(job._persistRevision || 0) + 1;
+  job._persistRevision = revision;
+  // Progress can change once per asset. Keep only the newest snapshot and
+  // throttle mutations to the single GCS state object so large exports do not
+  // hit Cloud Storage's per-object update rate limit.
+  job._persistSnapshot = `${JSON.stringify(buildCatalogExportStoredJob(job), null, 2)}\n`;
+  if (job._persistInFlight || job._persistTimer) return;
+
+  const flush = async () => {
+    job._persistTimer = null;
+    if (job._persistInFlight) return;
+    const snapshot = job._persistSnapshot;
+    const snapshotRevision = Number(job._persistRevision || 0);
+    if (!snapshot || snapshotRevision <= Number(job._persistCommittedRevision || 0)) return;
+
+    job._persistInFlight = true;
+    const persistLabel = `Persisting job ${job.exportId} rev ${snapshotRevision}`;
+    try {
+      const persistPromise = retryCatalogExportStorageOperation(
+        persistLabel,
+        () => storage.bucket(BUCKET).file(exportJobStateObject(job.exportId)).save(snapshot, {
+          contentType: "application/json",
+          resumable: false,
+          metadata: {
+            cacheControl: "private, max-age=0, no-store",
+          },
+        })
+      );
+      job._persistPromise = persistPromise;
+      await persistPromise;
+      job._persistCommittedRevision = snapshotRevision;
+    } catch (error) {
+      console.error(`[catalog-export] ${persistLabel} failed: ${error?.message || error}`);
+    } finally {
+      job._persistInFlight = false;
+      if (Number(job._persistRevision || 0) > Number(job._persistCommittedRevision || 0)) {
+        job._persistTimer = setTimeout(flush, EXPORT_STATE_PERSIST_MIN_INTERVAL_MS);
+        if (typeof job._persistTimer.unref === "function") job._persistTimer.unref();
+      }
+    }
+  };
+
+  void flush();
+}
+
+function hydrateStoredCatalogExportJob(job) {
+  if (!job || typeof job !== "object" || !job.exportId) return null;
+  return {
+    ...job,
+    jobDir: String(job.jobDir || path.join(LOCAL_EXPORT_ROOT, String(job.exportId || "").trim())),
+  };
+}
+
+async function loadPersistedCatalogExportJob(exportId) {
+  if (!exportId) return null;
+  try {
+    const [buf] = await retryCatalogExportStorageOperation(
+      `Loading job ${exportId}`,
+      () => storage.bucket(BUCKET).file(exportJobStateObject(exportId)).download()
+    );
+    const parsed = JSON.parse(buf.toString("utf8"));
+    if (!parsed || typeof parsed !== "object") return null;
+    return hydrateStoredCatalogExportJob(parsed);
+  } catch (error) {
+    console.warn(`[catalog-export] Loading persisted job ${exportId} failed: ${error?.message || error}`);
+    return null;
+  }
+}
+
+async function listPersistedCatalogExportJobs() {
+  try {
+    const [files] = await retryCatalogExportStorageOperation(
+      "Listing persisted catalog export jobs",
+      () => storage.bucket(BUCKET).getFiles({ prefix: `${EXPORT_JOB_PREFIX}/` })
+    );
+    const jobFiles = files.filter((file) => String(file.name || "").endsWith("/job.json"));
+    if (jobFiles.length === 0) return [];
+    const jobs = await Promise.all(
+      jobFiles.map(async (file) => {
+        try {
+          const [buf] = await file.download();
+          return hydrateStoredCatalogExportJob(JSON.parse(buf.toString("utf8")));
+        } catch (error) {
+          console.warn(`[catalog-export] Reading persisted job ${file.name || "unknown"} failed: ${error?.message || error}`);
+          return null;
+        }
+      })
+    );
+    return jobs.filter(Boolean);
+  } catch (error) {
+    // An unavailable durable job store must never look like an empty customer
+    // download history. Surface it to the request handler and keep the
+    // existing records untouched until storage is reachable again.
+    console.error(`[catalog-export] Listing persisted catalog export jobs failed: ${error?.message || error}`);
+    throw new Error(`The download history is temporarily unavailable: ${error?.message || error}`);
+  }
+}
+
+async function deletePersistedCatalogExportArtifacts(job) {
+  if (!job?.exportId) return;
+  const objectNames = [
+    exportJobStateObject(job.exportId),
+    job.manifestObject,
+    job.summaryObject,
+    ...(Array.isArray(job.parts) ? job.parts.map((part) => part.objectName).filter(Boolean) : []),
+  ].filter(Boolean);
+  await Promise.all(
+    objectNames.map(async (objectName) => {
+      try {
+        await storage.bucket(BUCKET).file(objectName).delete({ ignoreNotFound: true });
+      } catch (_error) {
+        // best effort
+      }
+    })
+  );
+}
+
+async function reconcileCatalogExportJob(job) {
+  if (!job?.exportId) return null;
+  const now = Date.now();
+  const expiryMigration = migrateLegacyCatalogExportExpiry(job, now);
+  if (expiryMigration.migrated) {
+    Object.assign(job, expiryMigration.job);
+    await persistCatalogExportJob(job);
+  }
+  const expiresAt = Date.parse(job.expiresAt || "");
+  if (expiresAt && expiresAt <= now) {
+    return null;
+  }
+  const isActive = ["preparing", "building"].includes(String(job.status || "").toLowerCase());
+  const lastProgressAt = catalogExportProgressTimestamp(job);
+  if (isActive && lastProgressAt && now - lastProgressAt > EXPORT_ACTIVE_JOB_STALE_MS) {
+    const staleMessage = "This package stopped making progress and was cleared. Please start a fresh download package.";
+    const reconciled = {
+      ...job,
+      status: "error",
+      phaseLabel: "Timed out",
+      progressMessage: staleMessage,
+      error: staleMessage,
+      stepCurrent: 0,
+      currentPart: 0,
+      updatedAt: new Date().toISOString(),
+    };
+    if (catalogExportJobs.has(job.exportId)) {
+      Object.assign(catalogExportJobs.get(job.exportId), reconciled);
+    }
+    await persistCatalogExportJob(reconciled);
+    return reconciled;
+  }
+  await refreshCatalogExportAvailability(job);
+  return job;
+}
+
+async function artifactExists({ objectName = "", filePath = "" } = {}) {
+  return artifactExistsWithFallback(
+    { objectName, filePath },
+    {
+      localExists: (candidate) => fs.existsSync(candidate),
+      remoteExists: async (candidate) => {
+        const [exists] = await storage.bucket(BUCKET).file(candidate).exists();
+        return exists;
+      },
+    }
+  );
+}
+
+async function refreshCatalogExportAvailability(job) {
+  if (!job?.exportId) return job;
+  const status = String(job.status || "").toLowerCase();
+  if (status !== "ready" && status !== "partial") {
+    job.downloadReady = false;
+    job.downloadUnavailableReason = "";
+    return job;
+  }
+
+  const checkedAt = Number(job._artifactCheckedAt || 0);
+  if (checkedAt && Date.now() - checkedAt < EXPORT_ARTIFACT_RECHECK_MS) {
+    return job;
+  }
+
+  const [manifestAvailable, summaryAvailable, verifiedParts] = await Promise.all([
+    artifactExists({ objectName: job.manifestObject, filePath: job.manifestPath }),
+    artifactExists({ objectName: job.summaryObject, filePath: job.summaryPath }),
+    Promise.all(
+      Array.isArray(job.parts)
+        ? job.parts.map(async (part) => {
+            const available = await artifactExists({ objectName: part.objectName, filePath: part.filePath });
+            return {
+              ...part,
+              available,
+              downloadUrl: available && part.partName
+                ? `/api/catalog-export/${job.exportId}/parts/${encodeURIComponent(part.partName)}`
+                : "",
+            };
+          })
+        : []
+    ),
+  ]);
+
+  job.parts = verifiedParts;
+  job.manifestAvailable = manifestAvailable;
+  job.summaryAvailable = summaryAvailable;
+  job.downloadReady = manifestAvailable || summaryAvailable || verifiedParts.some((part) => part.available);
+  job.downloadUnavailableReason = job.downloadReady
+    ? ""
+    : "This package is no longer downloadable. Prepare a fresh export package to download it again.";
+  job._artifactCheckedAt = Date.now();
+
+  if (!job.downloadReady) {
+    job.phaseLabel = "Needs refresh";
+    job.progressMessage = job.downloadUnavailableReason;
+  }
+
+  return job;
+}
+
+function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid, songKeys = [], accountHandle = "" }) {
   const exportId = crypto.randomBytes(8).toString("hex");
   const jobDir = path.join(LOCAL_EXPORT_ROOT, exportId);
   ensureDir(jobDir);
+  const normalizedSongKeys = [...new Set(songKeys.map((value) => String(value || "").trim()).filter(Boolean))];
+  const requestScope = normalizedSongKeys.length === 0
+    ? "catalog"
+    : normalizedSongKeys.length === 1
+      ? "song"
+      : "selection";
   const job = {
     exportId,
     workspaceId,
     ownerUid,
     requestedByUid,
+    requestScope,
+    requestSongKeys: normalizedSongKeys,
+    requestAccountHandle: String(accountHandle || "").trim(),
+    requestSignature: buildCatalogExportSignature({
+      workspaceId,
+      songKeys: normalizedSongKeys,
+      accountHandle,
+    }),
     status: "preparing",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    lastProgressAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + EXPORT_TTL_MS).toISOString(),
     jobDir,
     error: "",
@@ -319,28 +854,115 @@ function createCatalogExportJob({ workspaceId, ownerUid, requestedByUid }) {
     currentPart: 0,
     manifestPath: "",
     summaryPath: "",
+    manifestObject: "",
+    summaryObject: "",
     totalRows: 0,
     totalAssets: 0,
     totalBytes: 0,
     missingAssets: 0,
     partCount: 0,
     parts: [],
+    _persistRevision: 0,
+    _persistCommittedRevision: 0,
+    _persistPromise: Promise.resolve(),
   };
   catalogExportJobs.set(exportId, job);
+  queueCatalogExportPersist(job);
   return job;
 }
 
 function setCatalogExportProgress(job, updates = {}) {
   if (!job) return;
   Object.assign(job, updates);
-  job.updatedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+  job.updatedAt = now;
+  job.lastProgressAt = now;
+  queueCatalogExportPersist(job);
+}
+
+function startCatalogExportHeartbeat(job) {
+  if (!job?.exportId || EXPORT_HEARTBEAT_MS <= 0) return null;
+  const timer = setInterval(() => {
+    if (!catalogExportJobs.has(job.exportId)) {
+      catalogExportJobs.set(job.exportId, job);
+    }
+    job.updatedAt = new Date().toISOString();
+    queueCatalogExportPersist(job);
+  }, EXPORT_HEARTBEAT_MS);
+  if (typeof timer.unref === "function") {
+    timer.unref();
+  }
+  return timer;
+}
+
+async function catalogExportObjectMatchesFile(filePath, destination, label) {
+  const expectedBytes = Number(fs.statSync(filePath).size || 0);
+  if (expectedBytes <= 0) {
+    throw new Error(`${label} cannot upload an empty artifact.`);
+  }
+  const file = storage.bucket(BUCKET).file(destination);
+  try {
+    const [metadata] = await withTimeout(
+      file.getMetadata(),
+      EXPORT_ASSET_METADATA_TIMEOUT_MS,
+      `Checking ${label}`
+    );
+    const actualBytes = Number(metadata?.size || 0);
+    if (actualBytes === expectedBytes) {
+      return { matches: true, expectedBytes, actualBytes };
+    }
+    console.warn(
+      `[catalog-export] ${label} has incomplete object ${destination}: expected=${expectedBytes} actual=${actualBytes}; replacing it.`
+    );
+    await file.delete({ ignoreNotFound: true });
+  } catch (error) {
+    const code = Number(error?.code || error?.statusCode || 0);
+    if (code !== 404 && !/No such object|not found/i.test(String(error?.message || error || ""))) {
+      throw error;
+    }
+  }
+  return { matches: false, expectedBytes, actualBytes: 0 };
+}
+
+async function uploadCatalogExportFile(filePath, destination, contentType, label) {
+  const beforeUpload = await catalogExportObjectMatchesFile(filePath, destination, label);
+  if (beforeUpload.matches) {
+    console.log(`[catalog-export] ${label} already verified in durable storage; reusing it.`);
+    return beforeUpload.expectedBytes;
+  }
+  await retryCatalogExportStorageOperation(
+    label,
+    () => withTimeout(
+      storage.bucket(BUCKET).upload(filePath, {
+        destination,
+        contentType,
+        // Multi-hundred-megabyte package parts must use the resumable upload
+        // protocol. A single-request upload can stall at the final transfer.
+        resumable: true,
+        timeout: EXPORT_STORAGE_UPLOAD_TIMEOUT_MS,
+      }),
+      EXPORT_STORAGE_UPLOAD_TIMEOUT_MS,
+      label
+    )
+  );
+  const verified = await catalogExportObjectMatchesFile(filePath, destination, label);
+  if (!verified.matches) {
+    throw new Error(`${label} completed without a size-verified Cloud Storage artifact.`);
+  }
+  return verified.expectedBytes;
 }
 
 function serializeCatalogExportJob(job) {
+  const scope = catalogExportScopeDetails(job);
   return {
     ok: true,
     exportId: job.exportId,
     workspaceId: job.workspaceId,
+    requestScope: scope.requestScope,
+    requestAccountHandle: job.requestAccountHandle || "",
+    selectionCount: scope.selectionCount,
+    scopeLabel: scope.scopeLabel,
+    requestLabel: scope.requestLabel,
     status: job.status,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
@@ -356,28 +978,95 @@ function serializeCatalogExportJob(job) {
     totalBytesLabel: byteLabel(job.totalBytes || 0),
     missingAssets: job.missingAssets || 0,
     partCount: job.partCount || 0,
-    parts: job.parts || [],
-    manifestUrl: job.manifestPath ? `/api/catalog-export/${job.exportId}/manifest` : "",
-    summaryUrl: job.summaryPath ? `/api/catalog-export/${job.exportId}/summary` : "",
+    parts: hydrateCatalogExportParts(job),
+    manifestUrl:
+      (job.manifestAvailable ?? hasArtifact(job, "manifest")) ? `/api/catalog-export/${job.exportId}/manifest` : "",
+    summaryUrl:
+      (job.summaryAvailable ?? hasArtifact(job, "summary")) ? `/api/catalog-export/${job.exportId}/summary` : "",
+    downloadReady: Boolean(job.downloadReady),
+    downloadUnavailableReason: job.downloadUnavailableReason || "",
     summary: job.summary || null,
     error: job.error || "",
   };
 }
 
 function cleanupExpiredCatalogExports() {
-  const now = Date.now();
-  for (const [exportId, job] of catalogExportJobs.entries()) {
-    const expiresAt = Date.parse(job?.expiresAt || "");
-    if (!expiresAt || expiresAt > now) continue;
-    try {
-      if (job?.jobDir && fs.existsSync(job.jobDir)) {
-        fs.rmSync(job.jobDir, { recursive: true, force: true });
-      }
-    } catch (_error) {
-      // best effort
-    }
-    catalogExportJobs.delete(exportId);
+  // Package history is customer data. Expiry may control the UI's freshness
+  // copy, but it must never silently delete the persisted job record or a
+  // completed archive. Deletion requires a future explicit/audited action.
+}
+
+function isCatalogExportActiveAndStale(job, thresholdMs = EXPORT_RESUME_STALE_MS) {
+  const status = String(job?.status || "").toLowerCase();
+  if (!["preparing", "building"].includes(status)) return false;
+  const lastProgressAt = catalogExportProgressTimestamp(job);
+  return Boolean(lastProgressAt && Date.now() - lastProgressAt > thresholdMs);
+}
+
+async function maybeResumeCatalogExportJob(job, context, accessToken) {
+  if (!job || !context?.isAuthenticated || !accessToken) return job;
+  if (!isCatalogExportActiveAndStale(job)) return job;
+
+  const lastResumeAt = Number(job._resumeRequestedAt || 0);
+  if (lastResumeAt && Date.now() - lastResumeAt < 2 * 60 * 1000) {
+    return job;
   }
+
+  job._resumeRequestedAt = Date.now();
+  catalogExportJobs.set(job.exportId, job);
+  setCatalogExportProgress(job, {
+    status: "preparing",
+    phaseLabel: "Resuming package build",
+    progressMessage: "This package stalled earlier, so we are resuming it now.",
+    error: "",
+  });
+  void runCatalogExportJob(job, context, accessToken).catch((error) => {
+    setCatalogExportProgress(job, {
+      status: job.parts?.length || job.manifestObject || job.summaryObject ? "partial" : "error",
+      phaseLabel: job.parts?.length || job.manifestObject || job.summaryObject ? "Partially ready" : "Failed",
+      progressMessage: job.parts?.length || job.manifestObject || job.summaryObject
+        ? "Some verified package files are ready below. The remaining package build failed, so start a fresh package for a complete set."
+        : "This package did not finish successfully.",
+      error: error?.message || String(error),
+    });
+  });
+  return job;
+}
+
+async function getCatalogExportJob(exportId, context = null, accessToken = "") {
+  if (!exportId) return null;
+  const localJob = catalogExportJobs.get(exportId);
+  if (localJob) {
+    return reconcileCatalogExportJob(await maybeResumeCatalogExportJob(localJob, context, accessToken));
+  }
+  const persisted = await loadPersistedCatalogExportJob(exportId);
+  return reconcileCatalogExportJob(await maybeResumeCatalogExportJob(persisted, context, accessToken));
+}
+
+async function getAccessibleCatalogExportJobs(context, accessToken = "") {
+  const persistedJobs = await listPersistedCatalogExportJobs();
+  const merged = new Map();
+
+  for (const job of persistedJobs) {
+    if (!job?.exportId) continue;
+    const reconciled = await reconcileCatalogExportJob(
+      await maybeResumeCatalogExportJob(job, context, accessToken)
+    );
+    if (!reconciled) continue;
+    merged.set(job.exportId, reconciled);
+  }
+
+  for (const [exportId, job] of catalogExportJobs.entries()) {
+    const reconciled = await reconcileCatalogExportJob(
+      await maybeResumeCatalogExportJob(job, context, accessToken)
+    );
+    if (!reconciled) continue;
+    merged.set(exportId, reconciled);
+  }
+
+  return [...merged.values()]
+    .filter((job) => canAccessCatalogExport(job, context))
+    .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || "") - Date.parse(a.updatedAt || a.createdAt || ""));
 }
 
 function loadLocalCatalogFallback() {
@@ -530,22 +1219,35 @@ function buildWorkspaceCatalogRows(csvText, sourceDocs) {
   const parsedRows = parseCatalogCsv(csvText);
   const sourceIds = new Set();
   const handles = new Set();
+  const accountLabels = new Set();
 
   for (const sourceDoc of sourceDocs) {
     const sourceId = sourceDoc.name?.split("/").pop() || "";
     const handle = fsString(sourceDoc, "handle");
+    const accountLabel =
+      fsString(sourceDoc, "accountLabel") || canonicalAccountLabel(handle) || handle;
     if (sourceId) sourceIds.add(sourceId);
     if (handle) handles.add(handle);
+    if (accountLabel) accountLabels.add(accountLabel);
+    const aliasedHandle = SUNO_ACCOUNT_LABEL_ALIASES[handle];
+    if (aliasedHandle) accountLabels.add(aliasedHandle);
   }
 
   return parsedRows.filter((row) => {
     const sourceId = String(row.account_sourceId || "").trim();
     const handle = String(row.account_handle || "").trim();
-    return sourceIds.has(sourceId) || handles.has(handle);
+    const label = String(row.account_label || "").trim();
+    return (
+      sourceIds.has(sourceId) ||
+      handles.has(handle) ||
+      accountLabels.has(label) ||
+      accountLabels.has(canonicalAccountLabel(handle, label))
+    );
   });
 }
 
 async function resolveAssetDescriptor({ songKey, title, kind, gsUrl, exportPath, notes }) {
+  gsUrl = normalizeStorageObjectReference(gsUrl);
   if (!gsUrl || !isGsObjectPath(gsUrl)) {
     return {
       kind,
@@ -558,7 +1260,14 @@ async function resolveAssetDescriptor({ songKey, title, kind, gsUrl, exportPath,
 
   try {
     const { bucket, object } = parseGsObjectUrl(gsUrl);
-    const [metadata] = await storage.bucket(bucket).file(object).getMetadata();
+    const [metadata] = await Promise.race([
+      storage.bucket(bucket).file(object).getMetadata(),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Timed out loading metadata for ${kind} asset: ${gsUrl}`));
+        }, EXPORT_ASSET_METADATA_TIMEOUT_MS);
+      }),
+    ]);
     return {
       kind,
       exportPath,
@@ -587,13 +1296,7 @@ function isGsObjectPath(value) {
   return /^gs:\/\//i.test(String(value || "").trim());
 }
 
-async function buildExportRowsForWorkspace(rows) {
-  const exportRows = [];
-  let totalAssets = 0;
-  let totalBytes = 0;
-  let missingAssets = 0;
-
-  for (const row of rows) {
+async function buildExportRow(row) {
     const songKey = safeFilePart(row.songKey, crypto.randomBytes(4).toString("hex"));
     const fileStem = buildExportFileStem(row);
 
@@ -603,93 +1306,203 @@ async function buildExportRowsForWorkspace(rows) {
     const lyricsVttGs = row.gcsLyricsVtt || "";
     const inlineLyrics = String(row.lyrics || "").trim();
 
-    const audioAsset = await resolveAssetDescriptor({
-      songKey,
-      title: row.title,
-      kind: "audio",
-      gsUrl: audioGs,
-      exportPath: `audio/${fileStem}${extFromObjectName(audioGs, ".mp3")}`,
-      notes: "missing_audio",
-    });
-    const imageAsset = await resolveAssetDescriptor({
-      songKey,
-      title: row.title,
-      kind: "thumb",
-      gsUrl: imageGs,
-      exportPath: `images/thumbs/${fileStem}${extFromObjectName(imageGs, ".jpg")}`,
-      notes: "missing_image",
-    });
-    const lyricsTxtAsset = lyricsTxtGs
-      ? await resolveAssetDescriptor({
-          songKey,
-          title: row.title,
-          kind: "lyrics_txt",
-          gsUrl: lyricsTxtGs,
-          exportPath: `lyrics/txt/${fileStem}.txt`,
-          notes: "missing_lyrics",
-        })
-      : inlineLyrics
-        ? {
-            kind: "lyrics_txt",
-            exportPath: `lyrics/txt/${fileStem}.txt`,
-            exists: true,
-            estimatedBytes: Buffer.byteLength(inlineLyrics, "utf8"),
-            inlineContent: inlineLyrics,
-            note: "",
+    const [audioAsset, imageAsset, resolvedLyricsTxtAsset, lyricsVttAsset] = await Promise.all([
+      resolveAssetDescriptor({
+        songKey,
+        title: row.title,
+        kind: "audio",
+        gsUrl: audioGs,
+        exportPath: `audio/${fileStem}${extFromObjectName(audioGs, ".mp3")}`,
+        notes: "missing_audio",
+      }),
+      resolveAssetDescriptor({
+        songKey,
+        title: row.title,
+        kind: "thumb",
+        gsUrl: imageGs,
+        exportPath: `images/thumbs/${fileStem}${extFromObjectName(imageGs, ".jpg")}`,
+        notes: "missing_image",
+      }),
+      lyricsTxtGs
+        ? resolveAssetDescriptor({
             songKey,
             title: row.title,
-          }
-        : {
             kind: "lyrics_txt",
+            gsUrl: lyricsTxtGs,
             exportPath: `lyrics/txt/${fileStem}.txt`,
-            exists: false,
-            estimatedBytes: 0,
-            note: "missing_lyrics",
-            songKey,
-            title: row.title,
-          };
-    const lyricsVttAsset = await resolveAssetDescriptor({
-      songKey,
-      title: row.title,
-      kind: "lyrics_vtt",
-      gsUrl: lyricsVttGs,
-      exportPath: `lyrics/vtt/${fileStem}.vtt`,
-      notes: "missing_lyrics_vtt",
-    });
+            notes: "missing_lyrics",
+          })
+        : Promise.resolve(
+            inlineLyrics
+              ? {
+                  kind: "lyrics_txt",
+                  exportPath: `lyrics/txt/${fileStem}.txt`,
+                  exists: true,
+                  estimatedBytes: Buffer.byteLength(inlineLyrics, "utf8"),
+                  inlineContent: inlineLyrics,
+                  note: "",
+                  songKey,
+                  title: row.title,
+                }
+              : {
+                  kind: "lyrics_txt",
+                  exportPath: `lyrics/txt/${fileStem}.txt`,
+                  exists: false,
+                  estimatedBytes: 0,
+                  note: "missing_lyrics",
+                  songKey,
+                  title: row.title,
+                }
+          ),
+      resolveAssetDescriptor({
+        songKey,
+        title: row.title,
+        kind: "lyrics_vtt",
+        gsUrl: lyricsVttGs,
+        exportPath: `lyrics/vtt/${fileStem}.vtt`,
+        notes: "missing_lyrics_vtt",
+      }),
+    ]);
+    const lyricsTxtAsset = resolvedLyricsTxtAsset;
 
     const assets = [audioAsset, imageAsset, lyricsTxtAsset, lyricsVttAsset];
     const availableAssets = assets.filter((asset) => asset.exists);
     const missingKinds = assets.filter((asset) => !asset.exists).map((asset) => asset.note).filter(Boolean);
+    const estimatedBytes = availableAssets.reduce((sum, asset) => sum + Number(asset.estimatedBytes || 0), 0);
 
-    totalAssets += availableAssets.length;
-    totalBytes += availableAssets.reduce((sum, asset) => sum + Number(asset.estimatedBytes || 0), 0);
-    missingAssets += assets.length - availableAssets.length;
-
-    exportRows.push({
+    return {
       original: row,
       songKey,
       title: row.title || "",
       accountHandle: row.account_handle || "",
       assets,
-      estimatedBytes: availableAssets.reduce((sum, asset) => sum + Number(asset.estimatedBytes || 0), 0),
-      manifest: {
-        ...row,
-        exportFileStem: fileStem,
-        audioPath: audioAsset.exists ? audioAsset.exportPath : "",
-        thumbPath: imageAsset.exists ? imageAsset.exportPath : "",
-        imagePath: imageAsset.exists ? imageAsset.exportPath : "",
-        lyricsTxtPath: lyricsTxtAsset.exists ? lyricsTxtAsset.exportPath : "",
-        lyricsVttPath: lyricsVttAsset.exists ? lyricsVttAsset.exportPath : "",
-        exportPart: "",
-        assetStatus:
-          missingKinds.length === 0
-            ? "complete"
-            : missingKinds.length === assets.length
-              ? "missing_multiple"
-              : [...new Set(missingKinds)].join("|"),
-        notes: missingKinds.join(", "),
-      },
-    });
+      estimatedBytes,
+      manifest: buildCustomerManifestRow(
+        row,
+        fileStem,
+        audioAsset,
+        imageAsset,
+        lyricsTxtAsset,
+        lyricsVttAsset,
+        missingKinds
+      ),
+    };
+}
+
+function buildTimedOutExportRow(row, error) {
+  const songKey = safeFilePart(row.songKey, crypto.randomBytes(4).toString("hex"));
+  const fileStem = buildExportFileStem(row);
+  const audioGs = row.gcs_latest_audio || row.gcs_mp3 || row.audio_url || "";
+  const imageGs = row.gcs_latest_thumb || row.gcs_thumb || row.image_url || "";
+  const inlineLyrics = String(row.lyrics || "").trim();
+  const assets = [
+    {
+      kind: "audio",
+      exportPath: `audio/${fileStem}${extFromObjectName(audioGs, ".mp3")}`,
+      exists: false,
+      estimatedBytes: 0,
+      note: "asset_resolution_timeout",
+      songKey,
+      title: row.title,
+    },
+    {
+      kind: "thumb",
+      exportPath: `images/thumbs/${fileStem}${extFromObjectName(imageGs, ".jpg")}`,
+      exists: false,
+      estimatedBytes: 0,
+      note: "asset_resolution_timeout",
+      songKey,
+      title: row.title,
+    },
+    inlineLyrics
+      ? {
+          kind: "lyrics_txt",
+          exportPath: `lyrics/txt/${fileStem}.txt`,
+          exists: true,
+          estimatedBytes: Buffer.byteLength(inlineLyrics, "utf8"),
+          inlineContent: inlineLyrics,
+          note: "",
+          songKey,
+          title: row.title,
+        }
+      : {
+          kind: "lyrics_txt",
+          exportPath: `lyrics/txt/${fileStem}.txt`,
+          exists: false,
+          estimatedBytes: 0,
+          note: "asset_resolution_timeout",
+          songKey,
+          title: row.title,
+        },
+    {
+      kind: "lyrics_vtt",
+      exportPath: `lyrics/vtt/${fileStem}.vtt`,
+      exists: false,
+      estimatedBytes: 0,
+      note: "asset_resolution_timeout",
+      songKey,
+      title: row.title,
+    },
+  ];
+  console.error(
+    `[catalog-export] asset resolution skipped song=${row.songKey || "unknown"} title=${row.title || "unknown"}: ${error?.message || error}`
+  );
+  return {
+    original: row,
+    songKey,
+    title: row.title || "",
+    accountHandle: row.account_handle || "",
+    assets,
+    estimatedBytes: assets.filter((asset) => asset.exists).reduce((sum, asset) => sum + Number(asset.estimatedBytes || 0), 0),
+    manifest: buildCustomerManifestRow(
+      row,
+      fileStem,
+      assets[0],
+      assets[1],
+      assets[2],
+      assets[3],
+      assets.filter((asset) => !asset.exists).map((asset) => asset.note).filter(Boolean)
+    ),
+  };
+}
+
+async function buildExportRowSafely(row) {
+  try {
+    return await withTimeout(
+      buildExportRow(row),
+      EXPORT_BUILD_ROW_TIMEOUT_MS,
+      `Resolving assets for ${row.title || row.songKey || "catalog row"}`
+    );
+  } catch (error) {
+    return buildTimedOutExportRow(row, error);
+  }
+}
+
+async function buildExportRowsForWorkspace(rows, onProgress) {
+  const exportRows = [];
+  let totalAssets = 0;
+  let totalBytes = 0;
+  let missingAssets = 0;
+  const totalRows = rows.length;
+
+  for (let offset = 0; offset < rows.length; offset += EXPORT_ROW_CONCURRENCY) {
+    const batch = rows.slice(offset, offset + EXPORT_ROW_CONCURRENCY);
+    const builtBatch = await Promise.all(batch.map((row) => buildExportRowSafely(row)));
+    for (const [batchIndex, builtRow] of builtBatch.entries()) {
+      exportRows.push(builtRow);
+      const availableAssets = builtRow.assets.filter((asset) => asset.exists);
+      totalAssets += availableAssets.length;
+      totalBytes += builtRow.estimatedBytes;
+      missingAssets += builtRow.assets.length - availableAssets.length;
+
+      if (typeof onProgress === "function") {
+        onProgress({
+          resolvedRows: offset + batchIndex + 1,
+          totalRows,
+          title: builtRow.title || "",
+        });
+      }
+    }
   }
 
   return {
@@ -731,76 +1544,179 @@ function shardExportRows(exportRows) {
   }));
 }
 
-async function writeZipPart(part, manifestCsv, summaryJson, targetPath) {
+async function writeZipPart(part, manifestCsv, summaryJson, targetPath, onProgress) {
   ensureDir(path.dirname(targetPath));
   const output = fs.createWriteStream(targetPath);
   const archive = archiver("zip", { zlib: { level: 6 } });
+  let archiveDone;
+  console.log(
+    `[catalog-export] writer=${EXPORT_WRITER_VERSION} part=${part.partName} phase=manifest target=${targetPath}`
+  );
 
-  const archiveDone = finished(output);
+  archiveDone = finished(output);
   archive.on("error", (error) => {
     output.destroy(error);
   });
   archive.pipe(output);
+  try {
+    archive.append(manifestCsv, { name: `manifest/${manifestFileNameForPart(part.partName, "catalog")}` });
+    archive.append(summaryJson, { name: `manifest/${manifestFileNameForPart(part.partName, "summary")}` });
+    archive.append(
+      [
+        "Unzip each catalog part into the same parent folder.",
+        "Audio, image, and lyrics filenames are already unique and safe to merge.",
+        "Manifest files are named per-part so they do not overwrite each other.",
+        "",
+      ].join("\n"),
+      { name: "manifest/README.txt" }
+    );
+    console.log(
+      `[catalog-export] writer=${EXPORT_WRITER_VERSION} part=${part.partName} phase=assets totalAssets=${part.rows.reduce((sum, row) => sum + row.assets.filter((asset) => asset.exists).length, 0)}`
+    );
 
-  archive.append(manifestCsv, { name: `manifest/${manifestFileNameForPart(part.partName, "catalog")}` });
-  archive.append(summaryJson, { name: `manifest/${manifestFileNameForPart(part.partName, "summary")}` });
-  archive.append(
-    [
-      "Unzip each catalog part into the same parent folder.",
-      "Audio, image, and lyrics filenames are already unique and safe to merge.",
-      "Manifest files are named per-part so they do not overwrite each other.",
-      "",
-    ].join("\n"),
-    { name: "manifest/README.txt" }
-  );
-
-  for (const row of part.rows) {
-    for (const asset of row.assets) {
-      if (!asset.exists) continue;
-      if (asset.inlineContent != null) {
-        archive.append(asset.inlineContent, { name: asset.exportPath });
-        continue;
+    const totalAssets = part.rows.reduce((sum, row) => sum + row.assets.filter((asset) => asset.exists).length, 0);
+    let appendedAssets = 0;
+    for (const row of part.rows) {
+      for (const asset of row.assets) {
+        if (!asset.exists) continue;
+        if (asset.inlineContent != null) {
+          archive.append(asset.inlineContent, { name: asset.exportPath });
+        } else if (asset.kind !== "audio") {
+          const buffer = await downloadAssetBuffer(
+            asset.bucket,
+            asset.object,
+            EXPORT_ASSET_DOWNLOAD_TIMEOUT_MS,
+            `Downloading ${asset.kind} for ${asset.title || asset.songKey || asset.exportPath}`
+          );
+          archive.append(buffer, { name: asset.exportPath });
+        } else {
+          const stream = storage.bucket(asset.bucket).file(asset.object).createReadStream({
+            validation: false,
+          });
+          await appendArchiveStream(
+            archive,
+            stream,
+            asset.exportPath,
+            EXPORT_ASSET_DOWNLOAD_TIMEOUT_MS,
+            `Streaming ${asset.kind} for ${asset.title || asset.songKey || asset.exportPath}`
+          );
+        }
+        appendedAssets += 1;
+        if (typeof onProgress === "function") {
+          onProgress({
+            appendedAssets,
+            totalAssets,
+            title: row.title || asset.title || "",
+            partName: part.partName,
+          });
+        }
       }
-      archive.append(storage.bucket(asset.bucket).file(asset.object).createReadStream(), {
-        name: asset.exportPath,
-      });
     }
-  }
 
-  archive.finalize();
-  await archiveDone;
-  const stats = fs.statSync(targetPath);
-  return stats.size;
+    archive.finalize();
+    await withTimeout(archiveDone, EXPORT_BUILD_STEP_TIMEOUT_MS, `Finalizing ${part.partName}`);
+    const stats = fs.statSync(targetPath);
+    return stats.size;
+  } catch (error) {
+    console.error(`[catalog-export] part=${part.partName} failed; cleaning partial ZIP: ${error?.message || error}`);
+    try {
+      if (typeof archive.abort === "function") archive.abort();
+    } catch (_abortError) {
+      // Best effort: the original error is more useful to the caller.
+    }
+    if (!output.destroyed) output.destroy(error);
+    await archiveDone.catch(() => {});
+    try {
+      fs.unlinkSync(targetPath);
+    } catch (_unlinkError) {
+      // Best effort cleanup; do not hide the export failure.
+    }
+    throw error;
+  }
 }
 
 async function runCatalogExportJob(job, context, accessToken) {
-  setCatalogExportProgress(job, {
-    status: "preparing",
-    phaseLabel: "Loading catalog",
-    progressMessage: "Reading the latest catalog snapshot for this workspace.",
-    stepCurrent: 1,
-    stepTotal: 4,
-    currentPart: 0,
-    error: "",
-  });
+  job.jobDir = String(job.jobDir || path.join(LOCAL_EXPORT_ROOT, String(job.exportId || "").trim()));
+  ensureDir(job.jobDir);
+  const heartbeat = startCatalogExportHeartbeat(job);
+  try {
+    setCatalogExportProgress(job, {
+      status: "preparing",
+      phaseLabel: "Loading catalog",
+      progressMessage: "Reading the latest catalog snapshot for this workspace.",
+      stepCurrent: 1,
+      stepTotal: 4,
+      currentPart: 0,
+      error: "",
+    });
 
   const sourceDocs = await listWorkspaceSourceDocs(job.workspaceId, accessToken);
   const loaded = await loadCatalogCsv();
+  const requestedSongKeySet = new Set(Array.isArray(job.requestSongKeys) ? job.requestSongKeys : []);
+  const requestedAccountHandle = String(job.requestAccountHandle || "").trim();
+  const allCatalogRows = parseCatalogCsv(loaded.buffer.toString("utf8"));
   const workspaceRows = buildWorkspaceCatalogRows(loaded.buffer.toString("utf8"), sourceDocs);
+  const accountSourceRows = requestedAccountHandle && (context.platformAdmin || context.legacyMode)
+    ? allCatalogRows
+    : workspaceRows;
+  const exportableRows = requestedAccountHandle
+    ? accountSourceRows.filter((row) => {
+        const handle = String(row.account_handle || "").trim();
+        const label = String(row.account_label || "").trim();
+        return handle === requestedAccountHandle ||
+          label === requestedAccountHandle ||
+          canonicalAccountLabel(handle, label) === requestedAccountHandle;
+      })
+    : workspaceRows;
+  const selectionRows =
+    requestedSongKeySet.size > 0
+      ? (context.platformAdmin
+          ? allCatalogRows.filter((row) => requestedSongKeySet.has(String(row.songKey || "").trim()))
+          : exportableRows.filter((row) => requestedSongKeySet.has(String(row.songKey || "").trim())))
+      : [];
+  const scopedRows = requestedSongKeySet.size > 0
+    ? selectionRows
+    : exportableRows;
+  const rowLabel =
+    job.requestScope === "song"
+      ? "song"
+      : job.requestScope === "selection"
+        ? "selected song"
+        : "catalog row";
   setCatalogExportProgress(job, {
     phaseLabel: "Resolving assets",
-    progressMessage: `Found ${workspaceRows.length.toLocaleString()} catalog row${workspaceRows.length === 1 ? "" : "s"} for packaging.`,
+    progressMessage: `Found ${scopedRows.length.toLocaleString()} ${rowLabel}${scopedRows.length === 1 ? "" : "s"} for packaging.`,
     stepCurrent: 2,
   });
-  if (workspaceRows.length === 0) {
+  if (requestedSongKeySet.size === 0 && exportableRows.length === 0) {
     throw new Error(
-      "No exportable catalog rows were found for this workspace yet. Pick a workspace with cataloged songs or wait for harvest to finish."
+      requestedAccountHandle
+        ? "No exportable catalog rows were found for the selected account in this workspace yet. Pick another account or wait for harvest to finish."
+        : "No exportable catalog rows were found for this workspace yet. Pick a workspace with cataloged songs or wait for harvest to finish."
     );
   }
-  const prepared = await buildExportRowsForWorkspace(workspaceRows);
+  if (requestedSongKeySet.size > 0 && scopedRows.length === 0) {
+    throw new Error(
+      job.requestScope === "song"
+        ? "That song is not exportable from this workspace yet. Wait for harvest to finish or try another song."
+        : "None of the selected songs are exportable from this workspace yet. Wait for harvest to finish or refine the selection."
+    );
+  }
+  const prepared = await buildExportRowsForWorkspace(scopedRows, ({ resolvedRows, totalRows, title }) => {
+    setCatalogExportProgress(job, {
+      status: "preparing",
+      phaseLabel: "Resolving assets",
+      progressMessage: `Resolving assets for song ${resolvedRows.toLocaleString()} of ${totalRows.toLocaleString()}${title ? `: ${title}` : ""}`,
+      stepCurrent: 2,
+    });
+  });
   if (prepared.exportRows.length === 0) {
     throw new Error(
-      "We found the workspace, but there were no exportable song assets ready to package yet. Try again after the catalog finishes syncing."
+      job.requestScope === "song"
+        ? "We found the song, but its download assets are not ready to package yet. Try again after the catalog finishes syncing."
+        : job.requestScope === "selection"
+          ? "We found the selected songs, but their download assets are not ready to package yet. Try again after the catalog finishes syncing."
+          : "We found the workspace, but there were no exportable song assets ready to package yet. Try again after the catalog finishes syncing."
     );
   }
   const parts = shardExportRows(prepared.exportRows);
@@ -818,6 +1734,8 @@ async function runCatalogExportJob(job, context, accessToken) {
     exportId: job.exportId,
     workspaceId: job.workspaceId,
     workspaceName: context.activeWorkspace?.name || job.workspaceId,
+    requestScope: job.requestScope,
+    selectionCount: requestedSongKeySet.size,
     generatedAt: new Date().toISOString(),
     sourceCount: sourceDocs.length,
     totalRows: prepared.exportRows.length,
@@ -842,6 +1760,27 @@ async function runCatalogExportJob(job, context, accessToken) {
   const summaryPath = path.join(job.jobDir, "summary.json");
   fs.writeFileSync(manifestPath, manifestCsv, "utf8");
   fs.writeFileSync(summaryPath, summaryJson, "utf8");
+  job.manifestObject = exportJobManifestObject(job.exportId);
+  job.summaryObject = exportJobSummaryObject(job.exportId);
+  await uploadCatalogExportFile(
+    manifestPath,
+    job.manifestObject,
+    "text/csv",
+    `Uploading manifest for ${job.exportId}`
+  );
+  await uploadCatalogExportFile(
+    summaryPath,
+    job.summaryObject,
+    "application/json",
+    `Uploading summary for ${job.exportId}`
+  );
+  setCatalogExportProgress(job, {
+    manifestPath,
+    summaryPath,
+    manifestObject: job.manifestObject,
+    summaryObject: job.summaryObject,
+  });
+  await checkpointCatalogExportJob(job);
   setCatalogExportProgress(job, {
     phaseLabel: "Building packages",
     progressMessage: `Preparing ${parts.length.toLocaleString()} ZIP package part${parts.length === 1 ? "" : "s"}.`,
@@ -858,19 +1797,66 @@ async function runCatalogExportJob(job, context, accessToken) {
       currentPart: index + 1,
     });
     const filePath = path.join(job.jobDir, part.partName);
-    const sizeBytes = await writeZipPart(part, manifestCsv, summaryJson, filePath);
-    completedParts.push({
+    await writeZipPart(part, manifestCsv, summaryJson, filePath, ({ appendedAssets, totalAssets, title, partName }) => {
+      setCatalogExportProgress(job, {
+        status: "building",
+        phaseLabel: "Building packages",
+        progressMessage: `Building ${partName}: asset ${appendedAssets.toLocaleString()} of ${totalAssets.toLocaleString()}${title ? ` · ${title}` : ""}`,
+        stepCurrent: 3,
+        currentPart: index + 1,
+      });
+    });
+    const objectName = exportJobPartObject(job.exportId, part.partName);
+    setCatalogExportProgress(job, {
+      status: "building",
+      phaseLabel: "Uploading packages",
+      progressMessage: `Uploading ZIP ${index + 1} of ${parts.length}: ${part.partName}`,
+      stepCurrent: 3,
+      currentPart: index + 1,
+    });
+    const uploadedSizeBytes = await uploadCatalogExportFile(
+      filePath,
+      objectName,
+      "application/zip",
+      `Uploading ${part.partName} for ${job.exportId}`
+    );
+    const completedPart = {
       partName: part.partName,
       fileName: part.partName,
-      filePath,
+      filePath: "",
+      objectName,
       rowCount: part.rows.length,
       assetCount: part.assetCount,
       estimatedBytes: part.estimatedBytes,
       estimatedBytesLabel: byteLabel(part.estimatedBytes),
-      sizeBytes,
-      sizeLabel: byteLabel(sizeBytes),
+      sizeBytes: uploadedSizeBytes,
+      sizeLabel: byteLabel(uploadedSizeBytes),
       downloadUrl: `/api/catalog-export/${job.exportId}/parts/${encodeURIComponent(part.partName)}`,
+    };
+    job.parts = [
+      ...(Array.isArray(job.parts) ? job.parts.filter((entry) => entry.partName !== part.partName) : []),
+      completedPart,
+    ].sort((left, right) => String(left.partName).localeCompare(String(right.partName)));
+    job.totalRows = prepared.exportRows.length;
+    job.totalAssets = prepared.totalAssets;
+    job.totalBytes = prepared.totalBytes;
+    job.missingAssets = prepared.missingAssets;
+    job.partCount = job.parts.length;
+    job.summary = summary;
+    setCatalogExportProgress(job, {
+      status: "building",
+      phaseLabel: "Uploading packages",
+      progressMessage: `Verified ZIP ${index + 1} of ${parts.length}: ${part.partName}`,
+      stepCurrent: 3,
+      currentPart: index + 1,
     });
+    await checkpointCatalogExportJob(job);
+    try {
+      fs.unlinkSync(filePath);
+    } catch (_error) {
+      // Best effort: GCS is the source of truth once upload completes.
+    }
+    completedParts.push(completedPart);
   }
 
   job.manifestPath = manifestPath;
@@ -889,13 +1875,21 @@ async function runCatalogExportJob(job, context, accessToken) {
     stepCurrent: 4,
     currentPart: completedParts.length,
   });
-  if (context?.user?.email) {
-    await safeSendNotificationEmail({
-      accessToken,
-      to: context.user.email,
-      subject: `Catalog download ready: ${summary.workspaceName || job.workspaceId}`,
-      html: buildCatalogExportReadyEmail({ job, context, summary }),
-    });
+    // Commit the completed state before optional notification delivery. The
+    // download record and its artifacts are the primary customer outcome.
+    await checkpointCatalogExportJob(job);
+    if (context?.user?.email) {
+      await safeSendNotificationEmail({
+        accessToken,
+        to: context.user.email,
+        subject: `Catalog download ready: ${summary.workspaceName || job.workspaceId}`,
+        html: buildCatalogExportReadyEmail({ job, context, summary }),
+      });
+    }
+  } finally {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+    }
   }
 }
 
@@ -1372,6 +2366,7 @@ function buildRequestReceivedEmail(accessRequest) {
 }
 
 function buildRequestApprovedEmail({ accessRequest, workspaceName, role, planId, betaExpiresAt }) {
+  const vaultHref = `${PUBLIC_APP_ORIGIN || "https://music.aeonimus.info"}/vault`;
   const list = notificationList([
     { label: "Workspace", value: workspaceName || accessRequest.requestedWorkspaceName || "Workspace assigned" },
     { label: "Role", value: role || accessRequest.approvedRole || "viewer" },
@@ -1387,7 +2382,7 @@ function buildRequestApprovedEmail({ accessRequest, workspaceName, role, planId,
       ${list}
       <p style="margin:18px 0 0;">
         Open the app here:
-        <a href="https://music.aeonimus.info/vault" style="color:#b7bbff;">https://music.aeonimus.info/vault</a>
+        <a href="${vaultHref}" style="color:#b7bbff;">${vaultHref}</a>
       </p>
     `,
   });
@@ -1413,6 +2408,7 @@ function buildRequestDeniedEmail({ accessRequest, reviewNotes }) {
 }
 
 function buildOperatorRequestEmail(accessRequest) {
+  const controlCenterHref = `${PUBLIC_APP_ORIGIN || "https://music.aeonimus.info"}/control-center`;
   return notificationShell({
     title: "New beta request",
     intro: `${accessRequest.displayName || accessRequest.email} submitted a new beta request and it is waiting in the Control Center.`,
@@ -1430,7 +2426,7 @@ function buildOperatorRequestEmail(accessRequest) {
       <div style="margin-top:10px;padding:14px 16px;background:#171a31;border:1px solid #2b2f57;border-radius:16px;color:#eef0ff;">${accessRequest.intendedUse || "No intended use was provided."}</div>
       <p style="margin:18px 0 0;">
         Review in Control Center:
-        <a href="https://music.aeonimus.info/control-center" style="color:#b7bbff;">https://music.aeonimus.info/control-center</a>
+        <a href="${controlCenterHref}" style="color:#b7bbff;">${controlCenterHref}</a>
       </p>
     `,
   });
@@ -1959,6 +2955,40 @@ async function findAccessRequestForUser(uid, accessToken) {
   );
 }
 
+async function findAdminDocForIdentity({ uid = "", email = "" }, accessToken) {
+  const normalizedUid = String(uid || "").trim();
+  if (normalizedUid) {
+    try {
+      const directDoc = await fsGetDocByPath(`admins/${normalizedUid}`, accessToken);
+      if (directDoc) return directDoc;
+    } catch (error) {
+      console.warn("[auth-session] failed to load direct admin doc:", error?.message || error);
+    }
+  }
+
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const results = await fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: "admins" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "email" },
+            op: "EQUAL",
+            value: { stringValue: normalizedEmail },
+          },
+        },
+        limit: 1,
+      },
+    },
+    accessToken
+  );
+
+  return results.find((row) => row.document)?.document || null;
+}
+
 function buildAccessRequest(doc) {
   if (!doc) return null;
   return {
@@ -2064,7 +3094,13 @@ async function resolveRequestContext(req, accessToken) {
 
   let adminDoc = null;
   try {
-    adminDoc = await fsGetDocByPath(`admins/${decodedToken.uid}`, accessToken);
+    adminDoc = await findAdminDocForIdentity(
+      {
+        uid: decodedToken.uid,
+        email: decodedToken.email || fsString(refreshedUserDoc || userDoc, "email"),
+      },
+      accessToken
+    );
   } catch (error) {
     console.warn("[auth-session] failed to load admin doc:", error?.message || error);
   }
@@ -2229,6 +3265,120 @@ async function loadExportMeta() {
   }
 }
 
+function canonicalAccountLabel(rawHandle = "", rawLabel = "") {
+  const handle = String(rawHandle || "").trim();
+  const label = String(rawLabel || "").trim();
+  const picked = label || handle;
+  if (!picked) return "";
+  return SUNO_ACCOUNT_LABEL_ALIASES[picked] || SUNO_ACCOUNT_LABEL_ALIASES[handle] || picked;
+}
+
+function resolvePublishChannelFromSongDoc(songDoc) {
+  const handle = fsString(songDoc, "handle") || fsString(songDoc, "account_handle");
+  const label = canonicalAccountLabel(handle, fsString(songDoc, "account_label"));
+  if (label === "vanessa_secondary") return "vanessa_secondary";
+  if (label === "vanessa_primary") return "vanessa_primary";
+  const sourceId = fsString(songDoc, "account_sourceId") || fsString(songDoc, "sourceId");
+  if (sourceId.includes("nessihenize")) return "vanessa_secondary";
+  if (sourceId.includes("unshakableechos2341")) return "vanessa_primary";
+  return "vanessa_primary";
+}
+
+async function loadLatestSourceSong(accessToken) {
+  const snapshot = await loadLatestSourceSnapshot(accessToken);
+  return snapshot.latestSourceSong;
+}
+
+async function listActiveHarvestSources(accessToken) {
+  const results = await fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: SOURCES_COLLECTION }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "harvestEnabled" },
+            op: "EQUAL",
+            value: { booleanValue: true },
+          },
+        },
+        limit: 50,
+      },
+    },
+    accessToken
+  );
+  return results.filter((row) => row.document).map((row) => row.document);
+}
+
+async function loadLatestSongForSource(sourceId, accessToken) {
+  if (!sourceId) return null;
+  const results = await fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: SONG_COLLECTION }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "sourceId" },
+            op: "EQUAL",
+            value: { stringValue: sourceId },
+          },
+        },
+        orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
+        limit: 1,
+      },
+    },
+    accessToken
+  );
+  const doc = results.find((row) => row.document)?.document;
+  if (!doc) return null;
+  return {
+    songKey: fsString(doc, "songKey"),
+    title: fsString(doc, "title"),
+    createdAt: fsTimestamp(doc, "createdAt"),
+    status: fsString(doc, "status") || "active",
+    accountHandle:
+      fsString(doc, "account_handle") ||
+      fsString(doc, "account_label") ||
+      fsString(doc, "handle"),
+    sourceId,
+  };
+}
+
+async function loadLatestSourceSnapshot(accessToken) {
+  const sourceDocs = await listActiveHarvestSources(accessToken);
+  const accounts = [];
+  for (const sourceDoc of sourceDocs) {
+    const sourceId = sourceDoc.name?.split("/").pop() || "";
+    const handle = fsString(sourceDoc, "handle");
+    const accountLabel =
+      fsString(sourceDoc, "accountLabel") ||
+      canonicalAccountLabel(handle) ||
+      handle;
+    const latest = await loadLatestSongForSource(sourceId, accessToken);
+    if (!latest) continue;
+    accounts.push({
+      ...latest,
+      handle,
+      accountLabel,
+    });
+  }
+
+  accounts.sort(
+    (left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || "")
+  );
+  const timestamps = accounts
+    .map((account) => Date.parse(account.createdAt || ""))
+    .filter((value) => Number.isFinite(value));
+  const newestCreatedAt =
+    timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : "";
+
+  return {
+    accounts,
+    newestCreatedAt,
+    createdAt: newestCreatedAt,
+    latestSourceSong: accounts[0] || null,
+  };
+}
+
 async function listRecentAccessRequests(accessToken, limit = 10) {
   const results = await fsRunQuery(
     {
@@ -2323,12 +3473,20 @@ function numericOverride(value) {
   return Number.isFinite(next) ? next : undefined;
 }
 
-function findSignupTierByPlanId(planId) {
+function canonicalPlanKey(planId) {
   const normalizedPlanId = normalizePlanKey(planId);
+  const legacyAliases = {
+    "studio-monthly": "producer-monthly",
+  };
+  return legacyAliases[normalizedPlanId] || normalizedPlanId;
+}
+
+function findSignupTierByPlanId(planId) {
+  const normalizedPlanId = canonicalPlanKey(planId);
   return buildSignupCatalog().find((tier) => {
     return (
       normalizePlanKey(tier.id) === normalizedPlanId ||
-      normalizePlanKey(tier.defaultPlanId) === normalizedPlanId
+      canonicalPlanKey(tier.defaultPlanId) === normalizedPlanId
     );
   }) || null;
 }
@@ -2948,14 +4106,20 @@ app.get("/api/admin/overview", async (req, res) => {
     const context = await resolveRequestContext(req, accessToken);
     if (!requirePlatformAdmin(context, res)) return;
 
-    const [queueCounts, exportMeta, pendingCount, recentAccessRequests, catalogHealth, accessRequestSummary] = await Promise.all([
+    const [queueCounts, exportMeta, pendingCount, recentAccessRequests, catalogHealth, accessRequestSummary, latestSourceSnapshot] = await Promise.all([
       getQueueCounts(accessToken),
       loadExportMeta(),
       countPendingAccessRequests(accessToken),
       listRecentAccessRequests(accessToken, 8),
       inspectCatalogHealth(),
       summarizeAccessRequests(accessToken),
+      loadLatestSourceSnapshot(accessToken),
     ]);
+    const exportFreshness = summarizeExportFreshness({
+      exportMeta,
+      catalogHealth,
+      latestSource: latestSourceSnapshot,
+    });
 
     return res.json({
       ok: true,
@@ -2970,6 +4134,9 @@ app.get("/api/admin/overview", async (req, res) => {
         generator: exportMeta?.generator || "",
         artifact: exportMeta?.artifact || "",
       },
+      exportFreshness,
+      latestSourceSong: latestSourceSnapshot.latestSourceSong,
+      sourceAccounts: latestSourceSnapshot.accounts || [],
       catalogHealth,
       accessRequests: {
         pendingCount,
@@ -2981,6 +4148,44 @@ app.get("/api/admin/overview", async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: `admin-overview failed: ${error?.message || error}`,
+    });
+  }
+});
+
+app.get("/api/vault/freshness", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireOperatorAccess(context, res)) return;
+
+    const [exportMeta, catalogHealth, latestSourceSnapshot] = await Promise.all([
+      loadExportMeta(),
+      inspectCatalogHealth(),
+      loadLatestSourceSnapshot(accessToken),
+    ]);
+    const exportFreshness = summarizeExportFreshness({
+      exportMeta,
+      catalogHealth,
+      latestSource: latestSourceSnapshot,
+    });
+
+    return res.json({
+      ok: true,
+      exportArtifact: {
+        generatedAt: exportMeta?.generatedAt || "",
+        rowCount: Number(exportMeta?.rowCount || 0),
+        generator: exportMeta?.generator || "",
+        artifact: exportMeta?.artifact || "",
+      },
+      exportFreshness,
+      latestSourceSong: latestSourceSnapshot.latestSourceSong,
+      sourceAccounts: latestSourceSnapshot.accounts || [],
+      catalogHealth,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: `vault-freshness failed: ${error?.message || error}`,
     });
   }
 });
@@ -3353,6 +4558,10 @@ app.post("/api/catalog-export", async (req, res) => {
     ) return;
 
     const requestedWorkspaceId = String(req.body?.workspaceId || "").trim();
+    const requestedSongKeys = Array.isArray(req.body?.songKeys)
+      ? [...new Set(req.body.songKeys.map((value) => String(value || "").trim()).filter(Boolean))]
+      : [];
+    const requestedAccountHandle = String(req.body?.accountHandle || "").trim();
     let targetWorkspace = context.activeWorkspace;
     if (requestedWorkspaceId) {
       if (context.platformAdmin) {
@@ -3368,10 +4577,16 @@ app.post("/api/catalog-export", async (req, res) => {
       return res.status(400).json({ ok: false, error: "An active workspace is required for export." });
     }
 
-    const existingJob = [...catalogExportJobs.values()].find(
+    const existingJobs = await getAccessibleCatalogExportJobs(context, accessToken);
+    const existingJob = existingJobs.find(
       (job) =>
         job.workspaceId === targetWorkspace.workspaceId &&
         job.ownerUid === context.user.uid &&
+        job.requestSignature === buildCatalogExportSignature({
+          workspaceId: targetWorkspace.workspaceId,
+          songKeys: requestedSongKeys,
+          accountHandle: requestedAccountHandle,
+        }) &&
         ["preparing", "building", "ready"].includes(job.status) &&
         Date.parse(job.expiresAt || "") > Date.now()
     );
@@ -3384,14 +4599,35 @@ app.post("/api/catalog-export", async (req, res) => {
       workspaceId: targetWorkspace.workspaceId,
       ownerUid: context.user.uid,
       requestedByUid: context.user.uid,
+      songKeys: requestedSongKeys,
+      accountHandle: requestedAccountHandle,
     });
+
+    try {
+      // Do not begin a long-running package build until its durable recovery
+      // record exists. A revision restart can then resume/report it instead of
+      // making the customer package disappear from Downloads.
+      await persistCatalogExportJob(job);
+      job._persistCommittedRevision = Number(job._persistRevision || 0);
+    } catch (error) {
+      catalogExportJobs.delete(job.exportId);
+      return res.status(503).json({
+        ok: false,
+        error: `Unable to record this download request safely: ${error?.message || error}`,
+      });
+    }
 
     void runCatalogExportJob(job, { ...context, activeWorkspace: targetWorkspace }, accessToken).catch((error) => {
       setCatalogExportProgress(job, {
-        status: "error",
-        phaseLabel: "Failed",
-        progressMessage: "This package did not finish successfully.",
+        status: job.parts?.length || job.manifestObject || job.summaryObject ? "partial" : "error",
+        phaseLabel: job.parts?.length || job.manifestObject || job.summaryObject ? "Partially ready" : "Failed",
+        progressMessage: job.parts?.length || job.manifestObject || job.summaryObject
+          ? "Some verified package files are ready below. The remaining package build failed, so start a fresh package for a complete set."
+          : "This package did not finish successfully.",
         error: error?.message || String(error),
+      });
+      void persistCatalogExportJob(job).catch((persistError) => {
+        console.error(`[catalog-export] Persisting failed job ${job.exportId} failed: ${persistError?.message || persistError}`);
       });
     });
 
@@ -3411,9 +4647,7 @@ app.get("/api/catalog-exports", async (req, res) => {
     const context = await resolveRequestContext(req, accessToken);
     if (!requireVaultAccess(context, res)) return;
 
-    const jobs = [...catalogExportJobs.values()]
-      .filter((job) => canAccessCatalogExport(job, context))
-      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || "") - Date.parse(a.updatedAt || a.createdAt || ""));
+    const jobs = await getAccessibleCatalogExportJobs(context, accessToken);
 
     return res.json({
       ok: true,
@@ -3435,7 +4669,7 @@ app.get("/api/catalog-export/:exportId", async (req, res) => {
     if (!requireVaultAccess(context, res)) return;
 
     const exportId = String(req.params.exportId || "").trim();
-    const job = catalogExportJobs.get(exportId);
+    const job = await getCatalogExportJob(exportId, context, accessToken);
     if (!job) {
       return res.status(404).json({ ok: false, error: "Export job not found or expired." });
     }
@@ -3460,8 +4694,8 @@ app.get("/api/catalog-export/:exportId/manifest", async (req, res) => {
     if (!requireVaultAccess(context, res)) return;
 
     const exportId = String(req.params.exportId || "").trim();
-    const job = catalogExportJobs.get(exportId);
-    if (!job || !job.manifestPath || !fs.existsSync(job.manifestPath)) {
+    const job = await getCatalogExportJob(exportId, context, accessToken);
+    if (!job || (!job.manifestObject && (!job.manifestPath || !fs.existsSync(job.manifestPath)))) {
       return res.status(404).json({ ok: false, error: "Manifest not found or expired." });
     }
     if (!canAccessCatalogExport(job, context)) {
@@ -3469,8 +4703,23 @@ app.get("/api/catalog-export/:exportId/manifest", async (req, res) => {
     }
 
     res.set("Cache-Control", "private, no-store");
-    res.set("Content-Disposition", `attachment; filename="${job.workspaceId}-catalog.csv"`);
-    res.type("text/csv").send(fs.readFileSync(job.manifestPath));
+    const baseFileName = buildCatalogExportBaseFileName(job, {
+      workspaceId: context?.activeWorkspace?.workspaceId || job.workspaceId,
+      workspaceName: context?.activeWorkspace?.name || job.summary?.workspaceName || job.workspaceId,
+    });
+    res.set("Content-Disposition", `attachment; filename="${baseFileName}.csv"`);
+    res.type("text/csv");
+    const stream = job.manifestObject
+      ? storage.bucket(BUCKET).file(job.manifestObject).createReadStream()
+      : fs.createReadStream(job.manifestPath);
+    stream.on("error", (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: `catalog-export-manifest failed: ${error?.message || error}` });
+      } else {
+        res.destroy(error);
+      }
+    });
+    stream.pipe(res);
   } catch (error) {
     return res.status(500).json({
       ok: false,
@@ -3487,8 +4736,8 @@ app.get("/api/catalog-export/:exportId/summary", async (req, res) => {
     if (!requireVaultAccess(context, res)) return;
 
     const exportId = String(req.params.exportId || "").trim();
-    const job = catalogExportJobs.get(exportId);
-    if (!job || !job.summaryPath || !fs.existsSync(job.summaryPath)) {
+    const job = await getCatalogExportJob(exportId, context, accessToken);
+    if (!job || (!job.summaryObject && (!job.summaryPath || !fs.existsSync(job.summaryPath)))) {
       return res.status(404).json({ ok: false, error: "Summary not found or expired." });
     }
     if (!canAccessCatalogExport(job, context)) {
@@ -3496,8 +4745,23 @@ app.get("/api/catalog-export/:exportId/summary", async (req, res) => {
     }
 
     res.set("Cache-Control", "private, no-store");
-    res.set("Content-Disposition", `attachment; filename="${job.workspaceId}-catalog-summary.json"`);
-    res.type("application/json").send(fs.readFileSync(job.summaryPath));
+    const baseFileName = buildCatalogExportBaseFileName(job, {
+      workspaceId: context?.activeWorkspace?.workspaceId || job.workspaceId,
+      workspaceName: context?.activeWorkspace?.name || job.summary?.workspaceName || job.workspaceId,
+    });
+    res.set("Content-Disposition", `attachment; filename="${baseFileName}-summary.json"`);
+    res.type("application/json");
+    const stream = job.summaryObject
+      ? storage.bucket(BUCKET).file(job.summaryObject).createReadStream()
+      : fs.createReadStream(job.summaryPath);
+    stream.on("error", (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: `catalog-export-summary failed: ${error?.message || error}` });
+      } else {
+        res.destroy(error);
+      }
+    });
+    stream.pipe(res);
   } catch (error) {
     return res.status(500).json({
       ok: false,
@@ -3515,7 +4779,7 @@ app.get("/api/catalog-export/:exportId/parts/:partName", async (req, res) => {
 
     const exportId = String(req.params.exportId || "").trim();
     const partName = path.basename(String(req.params.partName || "").trim());
-    const job = catalogExportJobs.get(exportId);
+    const job = await getCatalogExportJob(exportId, context, accessToken);
     if (!job) {
       return res.status(404).json({ ok: false, error: "Export job not found or expired." });
     }
@@ -3524,13 +4788,25 @@ app.get("/api/catalog-export/:exportId/parts/:partName", async (req, res) => {
     }
 
     const part = (job.parts || []).find((entry) => entry.partName === partName);
-    if (!part || !part.filePath || !fs.existsSync(part.filePath)) {
+    const hasLocalPart = part?.filePath && fs.existsSync(part.filePath);
+    if (!part || (!part.objectName && !hasLocalPart)) {
       return res.status(404).json({ ok: false, error: "Export part not found." });
     }
 
     res.set("Cache-Control", "private, no-store");
     res.set("Content-Disposition", `attachment; filename="${part.fileName}"`);
-    res.type("application/zip").send(fs.readFileSync(part.filePath));
+    res.type("application/zip");
+    const stream = part.objectName
+      ? storage.bucket(BUCKET).file(part.objectName).createReadStream()
+      : fs.createReadStream(part.filePath);
+    stream.on("error", (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: `catalog-export-part failed: ${error?.message || error}` });
+      } else {
+        res.destroy(error);
+      }
+    });
+    stream.pipe(res);
   } catch (error) {
     return res.status(500).json({
       ok: false,
@@ -3938,6 +5214,7 @@ app.post("/api/queue-for-youtube", async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    const publishChannel = resolvePublishChannelFromSongDoc(songDoc);
 
     // Optional YouTube metadata overrides sent from the Vault UI
     const ytMeta = req.body?.ytMeta || {};
@@ -3964,6 +5241,7 @@ app.post("/api/queue-for-youtube", async (req, res) => {
         retryCount:    { integerValue: 0 },
         requestedFrom: { stringValue: "viewer" },
         gcsVideoUrl:   { stringValue: gcsVideoUrl },
+        ytPublishChannel: { stringValue: publishChannel },
         ...ytFields,
       },
       accessToken
@@ -3998,6 +5276,9 @@ app.get("/vault", (_req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 app.get("/signup", (_req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
+app.get("/login", (_req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 function loadControlCenterHtml() {

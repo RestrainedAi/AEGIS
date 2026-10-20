@@ -10,6 +10,8 @@ This document reformats the first-wave sprint backlog into a board-ready deliver
 
 ## Board Columns
 
+This first-wave view is a planning baseline. The [repo delivery board](../board/README.md) and its `tasks.json` hold recorded board state. Apply [Development DNA](DEVELOPMENT_PRINCIPLES.md) and the [feature brief](templates/FEATURE_BRIEF.md): one accountable owner per feature, bounded specialist tasks, inspected handoffs, and integrated acceptance evidence before closure. Preserve the original proposals below; this policy update does not mark them completed or create external issues.
+
 1. Backlog
 2. Ready
 3. In Progress

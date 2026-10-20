@@ -42,6 +42,8 @@ WORK_DIR        = Path(os.environ.get("WORK_DIR", "/app"))
 CATALOG_BUCKET  = "aeonimus-workspaces"
 CATALOG_META    = "exports/suno/latest_catalog_wide.meta.json"
 STALE_HOURS     = 26   # alert if catalog older than this
+SOURCE_IDLE_HOURS = int(os.environ.get("SOURCE_IDLE_HOURS", "26"))
+SOURCE_SCAN_STALE_HOURS = int(os.environ.get("SOURCE_SCAN_STALE_HOURS", "26"))
 QUEUE_COLLECTION = "ytUploadQueue"
 SECRET_MONITOR  = "pipeline-monitor-config"
 STATUS_SUMMARY_PATH = WORK_DIR / "pipeline_monitor_status.json"
@@ -63,6 +65,16 @@ def log_info(message: str):
 
 def log_warn(message: str):
     print(_safe_console_text(message), file=sys.stderr)
+
+
+def parse_iso_datetime(value: str):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_gcp_token() -> str:
@@ -147,6 +159,89 @@ def fs_count_songs(token: str) -> dict:
     return counts
 
 
+def fs_get_latest_song_field(token: str, field_path: str) -> dict:
+    url = (f"https://firestore.googleapis.com/v1/projects/{PROJECT}"
+           f"/databases/{DATABASE}/documents:runQuery")
+    body = json.dumps({
+        "structuredQuery": {
+            "from": [{"collectionId": "sunoSongs"}],
+            "select": {
+                "fields": [
+                    {"fieldPath": "songKey"},
+                    {"fieldPath": "title"},
+                    {"fieldPath": "account_handle"},
+                    {"fieldPath": "account_label"},
+                    {"fieldPath": "createdAt"},
+                    {"fieldPath": "lastSeenAt"},
+                    {"fieldPath": "status"},
+                ]
+            },
+            "orderBy": [{"field": {"fieldPath": field_path}, "direction": "DESCENDING"}],
+            "limit": 1,
+        }
+    }).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        results = json.loads(r.read())
+    for row in results:
+        doc = row.get("document")
+        if not doc:
+            continue
+        fields = doc.get("fields", {})
+        return {
+            "songKey": fields.get("songKey", {}).get("stringValue", ""),
+            "title": fields.get("title", {}).get("stringValue", ""),
+            "accountHandle": fields.get("account_handle", {}).get("stringValue", "")
+                or fields.get("account_label", {}).get("stringValue", ""),
+            "createdAt": fields.get("createdAt", {}).get("stringValue", ""),
+            "lastSeenAt": fields.get("lastSeenAt", {}).get("stringValue", ""),
+            "status": fields.get("status", {}).get("stringValue", ""),
+            "orderedBy": field_path,
+        }
+    return {}
+
+
+def fs_get_source_freshness(token: str) -> dict:
+    latest_created = {}
+    latest_seen = {}
+    try:
+        latest_created = fs_get_latest_song_field(token, "createdAt")
+    except Exception as e:
+        log_warn(f"  [WARN] latest source createdAt query failed: {e}")
+    try:
+        latest_seen = fs_get_latest_song_field(token, "lastSeenAt")
+    except Exception as e:
+        log_warn(f"  [WARN] latest source lastSeenAt query failed: {e}")
+
+    now = datetime.now(timezone.utc)
+    latest_created_at = parse_iso_datetime(latest_created.get("createdAt", ""))
+    latest_seen_at = parse_iso_datetime(latest_seen.get("lastSeenAt", ""))
+    source_content_age_hours = (
+        round((now - latest_created_at).total_seconds() / 3600, 2)
+        if latest_created_at
+        else None
+    )
+    source_seen_age_hours = (
+        round((now - latest_seen_at).total_seconds() / 3600, 2)
+        if latest_seen_at
+        else None
+    )
+
+    return {
+        "latestCreatedSong": latest_created,
+        "latestSeenSong": latest_seen,
+        "sourceContentAgeHours": source_content_age_hours,
+        "sourceSeenAgeHours": source_seen_age_hours,
+        "sourceIdleThresholdHours": SOURCE_IDLE_HOURS,
+        "sourceScanStaleThresholdHours": SOURCE_SCAN_STALE_HOURS,
+    }
+
+
 # ── Catalog age check ──────────────────────────────────────────────────────────
 def get_catalog_age(token: str) -> tuple[float | None, str]:
     """Returns (age_hours, generated_at_str). age_hours=None if unreachable."""
@@ -206,11 +301,16 @@ def build_digest_html(
     queue: dict,
     songs: dict,
     harvest: dict,
+    source: dict,
     partial_harvest_exit: int = 0,
     error_detail: str = "",
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     stale = catalog_age is not None and catalog_age > STALE_HOURS
+    source_content_age = source.get("sourceContentAgeHours")
+    source_seen_age = source.get("sourceSeenAgeHours")
+    source_idle = source_content_age is not None and source_content_age > SOURCE_IDLE_HOURS
+    source_scan_stale = source_seen_age is not None and source_seen_age > SOURCE_SCAN_STALE_HOURS
 
     if error_detail:
         header_bg = "#2b0f0f"
@@ -222,6 +322,16 @@ def build_digest_html(
         header_color = "#ffaa44"
         status_icon = "⚠️"
         status_text = "HARVEST PARTIAL"
+    elif source_scan_stale:
+        header_bg = "#2b0f0f"
+        header_color = "#ff6a6a"
+        status_icon = "🚨"
+        status_text = "SOURCE SCAN STALE"
+    elif source_idle:
+        header_bg = "#2b1f0f"
+        header_color = "#ffaa44"
+        status_icon = "⚠️"
+        status_text = "SOURCE IDLE"
     elif stale:
         header_bg = "#2b1f0f"
         header_color = "#ffaa44"
@@ -235,6 +345,10 @@ def build_digest_html(
 
     catalog_age_str = f"{catalog_age:.1f}h ago" if catalog_age is not None else "unknown"
     catalog_color   = "#ff6a6a" if stale else "#4aff8a"
+    source_content_age_str = f"{source_content_age:.1f}h ago" if source_content_age is not None else "unknown"
+    source_seen_age_str = f"{source_seen_age:.1f}h ago" if source_seen_age is not None else "unknown"
+    source_content_color = "#ff6a6a" if source_idle else "#4aff8a"
+    source_seen_color = "#ff6a6a" if source_scan_stale else "#4aff8a"
 
     per_handle = harvest.get("per_handle", [])
     harvest_rows = ""
@@ -291,6 +405,20 @@ Catalog export was still rebuilt from the successfully synced items.
     </table>
   </div>
 
+  <!-- Source freshness -->
+  <div style="background:#12121f;border-radius:10px;padding:16px;margin-bottom:12px">
+    <div style="color:#7c6fff;font-size:11px;font-weight:700;letter-spacing:.08em;
+                text-transform:uppercase;margin-bottom:10px">Source Freshness</div>
+    <table style="width:100%;border-collapse:collapse">
+      {_row("Newest source song age", source_content_age_str, source_content_color)}
+      {_row("Newest source song at", str(source.get("latestCreatedSong", {}).get("createdAt", ""))[:19].replace("T"," "))}
+      {_row("Newest source title", str(source.get("latestCreatedSong", {}).get("title", "")) or "unknown")}
+      {_row("Latest source scan age", source_seen_age_str, source_seen_color)}
+      {_row("Latest source seen at", str(source.get("latestSeenSong", {}).get("lastSeenAt", ""))[:19].replace("T"," "))}
+      {_row("Latest source handle", str(source.get("latestSeenSong", {}).get("accountHandle", "")) or "unknown")}
+    </table>
+  </div>
+
   <!-- Upload queue -->
   <div style="background:#12121f;border-radius:10px;padding:16px;margin-bottom:12px">
     <div style="color:#7c6fff;font-size:11px;font-weight:700;letter-spacing:.08em;
@@ -332,11 +460,16 @@ def build_status_summary(
     queue: dict,
     songs: dict,
     harvest: dict,
+    source: dict,
     partial_harvest_exit: int = 0,
     error_detail: str = "",
 ) -> dict:
     stale = catalog_age is not None and catalog_age > STALE_HOURS
     queue_errors = queue.get("error", 0)
+    source_content_age = source.get("sourceContentAgeHours")
+    source_seen_age = source.get("sourceSeenAgeHours")
+    source_idle = source_content_age is not None and source_content_age > SOURCE_IDLE_HOURS
+    source_scan_stale = source_seen_age is not None and source_seen_age > SOURCE_SCAN_STALE_HOURS
 
     if error_detail:
         status = "failure"
@@ -344,6 +477,12 @@ def build_status_summary(
     elif partial_harvest_exit:
         status = "partial_harvest"
         email_reason = "partial_harvest"
+    elif source_scan_stale:
+        status = "source_scan_stale"
+        email_reason = "source_scan_stale"
+    elif source_idle:
+        status = "source_idle"
+        email_reason = "source_idle"
     elif stale:
         status = "stale"
         email_reason = "catalog_stale"
@@ -365,6 +504,7 @@ def build_status_summary(
         "queueCounts": queue,
         "songCounts": songs,
         "harvestSummary": harvest,
+        "sourceFreshness": source,
         "partialHarvestExitCode": partial_harvest_exit,
         "errorDetail": error_detail[:2000] if error_detail else "",
     }
@@ -389,9 +529,14 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
     queue   = fs_query_status_counts(token)
     songs   = fs_count_songs(token)
     harvest = read_harvest_report()
+    source  = fs_get_source_freshness(token)
 
     stale       = catalog_age is not None and catalog_age > STALE_HOURS
     queue_errors = queue.get("error", 0)
+    source_content_age = source.get("sourceContentAgeHours")
+    source_seen_age = source.get("sourceSeenAgeHours")
+    source_idle = source_content_age is not None and source_content_age > SOURCE_IDLE_HOURS
+    source_scan_stale = source_seen_age is not None and source_seen_age > SOURCE_SCAN_STALE_HOURS
     summary = build_status_summary(
         mode,
         catalog_age,
@@ -399,6 +544,7 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         queue,
         songs,
         harvest,
+        source,
         partial_harvest_exit=partial_harvest_exit,
         error_detail=error_detail,
     )
@@ -407,6 +553,8 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         "[monitor] summary "
         f"status={summary['status']} "
         f"catalog_age_hours={summary['catalogAgeHours']} "
+        f"source_content_age_hours={source_content_age} "
+        f"source_seen_age_hours={source_seen_age} "
         f"queue_errors={queue_errors}"
     )
 
@@ -415,6 +563,10 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         subject = f"🚨 Aeonimus HARVEST FAILED — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     elif partial_harvest_exit:
         subject = f"⚠️ Aeonimus HARVEST PARTIAL (exit {partial_harvest_exit}) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+    elif source_scan_stale:
+        subject = f"🚨 Aeonimus Source SCAN STALE ({source_seen_age:.0f}h) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+    elif source_idle:
+        subject = f"⚠️ Aeonimus Source IDLE ({source_content_age:.0f}h) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     elif stale:
         subject = f"⚠️ Aeonimus Catalog STALE ({catalog_age:.0f}h) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     elif queue_errors > 0:
@@ -424,7 +576,15 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
 
     # Skip digest email if healthy and mode is post-harvest (avoid email spam on every run)
     # Only send on: failure, stale, daily-digest mode
-    if mode == "post-harvest" and not error_detail and not partial_harvest_exit and not stale and queue_errors == 0:
+    if (
+        mode == "post-harvest"
+        and not error_detail
+        and not partial_harvest_exit
+        and not source_scan_stale
+        and not source_idle
+        and not stale
+        and queue_errors == 0
+    ):
         log_info("[monitor] Pipeline healthy - skipping digest email (daily-digest will send it)")
         return
 
@@ -444,6 +604,7 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         queue,
         songs,
         harvest,
+        source,
         partial_harvest_exit=partial_harvest_exit,
         error_detail=error_detail,
     )

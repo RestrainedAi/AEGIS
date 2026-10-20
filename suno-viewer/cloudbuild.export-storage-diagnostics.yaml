@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for job in e5a0313ad60dc488 a01b619cadb8413d; do
+          echo "===== $job ====="
+          gcloud storage cat "gs://aeonimus-workspaces/exports/catalog-jobs/$job/job.json" | grep -E '"(workspaceId|ownerUid|requestedByUid|requestAccountHandle|status|createdAt|updatedAt|lastProgressAt|expiresAt|phaseLabel|progressMessage|error)"'
+        done
+options:
+  logging: CLOUD_LOGGING_ONLY

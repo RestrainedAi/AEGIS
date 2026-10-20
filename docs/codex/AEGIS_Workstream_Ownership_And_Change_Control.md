@@ -12,6 +12,10 @@ The rule is simple:
 
 ## Workstream Owners
 
+### Feature ownership within workstreams
+
+Apply [Development DNA](DEVELOPMENT_PRINCIPLES.md) within the ownership boundaries below. Every feature has one accountable owner; large features use a team of specialists with bounded tasks and focused context. Record the current agent filling each role, owned files, dependencies, handoffs, and acceptance evidence in the existing board or [feature brief](templates/FEATURE_BRIEF.md). These requirements supplement the named workstream owners; they do not grant a specialist ownership of another stream's shared surfaces.
+
 ### 1. SUNO Harvest
 
 Owner:

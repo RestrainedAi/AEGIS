@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "description": "Master suite order for AEGIS. Pre-deploy suites run before release; post-deploy suites require live domains/GCP.",
+  "suites": [
+    {
+      "featureId": "harvest-freshness",
+      "deployPhase": "pre-deploy",
+      "triggersOnPass": ["multi-account-harvest"]
+    },
+    {
+      "featureId": "vault-search-browse",
+      "deployPhase": "pre-deploy"
+    },
+    {
+      "featureId": "downloads-export",
+      "deployPhase": "pre-deploy"
+    },
+    {
+      "featureId": "multi-account-harvest",
+      "deployPhase": "pre-deploy",
+      "dependsOn": ["harvest-freshness"]
+    },
+    {
+      "featureId": "youtube-bridge",
+      "deployPhase": "pre-deploy"
+    },
+    {
+      "featureId": "auth-signup-tier",
+      "deployPhase": "both"
+    },
+    {
+      "featureId": "admin-control-center",
+      "deployPhase": "both"
+    },
+    {
+      "featureId": "auth-domain",
+      "deployPhase": "post-deploy"
+    },
+    {
+      "featureId": "cross-module-regression",
+      "deployPhase": "post-deploy",
+      "dependsOn": ["auth-domain"]
+    }
+  ]
+}

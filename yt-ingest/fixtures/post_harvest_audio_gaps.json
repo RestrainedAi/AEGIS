@@ -1,0 +1,227 @@
+[
+  {
+    "songKey": "997ca73f-d7cc-429c-a03a-7af480a617a0",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/997ca73f-d7cc-429c-a03a-7af480a617a0.mp3",
+    "expected_duration": 179.72,
+    "baseline": {
+      "revision": [
+        "1789110301587053",
+        4844,
+        179.72
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "912b36e6-742f-4adb-8da6-54d54cb081d4",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/912b36e6-742f-4adb-8da6-54d54cb081d4.mp3",
+    "expected_duration": 219.8,
+    "baseline": {
+      "revision": [
+        "1789283169500780",
+        4844,
+        219.8
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "7924db69-48b7-409c-9aa5-5ba72e9975aa",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/7924db69-48b7-409c-9aa5-5ba72e9975aa.mp3",
+    "expected_duration": 237.24,
+    "baseline": {
+      "revision": [
+        "1788419183165272",
+        4844,
+        237.24
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "d4c2a950-01c7-4903-a8e6-4ca39bc1bb54",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/d4c2a950-01c7-4903-a8e6-4ca39bc1bb54.mp3",
+    "expected_duration": 236.64,
+    "baseline": {
+      "revision": [
+        "1788419271821244",
+        4844,
+        236.64
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "b07cc863-d956-44eb-9870-b8aea7e7b937",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/b07cc863-d956-44eb-9870-b8aea7e7b937.mp3",
+    "expected_duration": 479.96,
+    "baseline": {
+      "revision": [
+        "1788419213381502",
+        4844,
+        479.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "c5b8fd0c-267c-4abe-ba5c-894d0702aade",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/c5b8fd0c-267c-4abe-ba5c-894d0702aade.mp3",
+    "expected_duration": 479.96,
+    "baseline": {
+      "revision": [
+        "1788419242664057",
+        4844,
+        479.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "477bf0ab-66f1-44cd-9396-a54fea634622",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/477bf0ab-66f1-44cd-9396-a54fea634622.mp3",
+    "expected_duration": 479.96,
+    "baseline": {
+      "revision": [
+        "1788419152029350",
+        4844,
+        479.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "5e8902f0-2909-4c2a-9af0-c3913c900ed1",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/5e8902f0-2909-4c2a-9af0-c3913c900ed1.mp3",
+    "expected_duration": 479.96,
+    "baseline": {
+      "revision": [
+        "1787987054402938",
+        4844,
+        479.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "ac3dcbce-fb43-4ea3-9064-459dd9044ae4",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/ac3dcbce-fb43-4ea3-9064-459dd9044ae4.mp3",
+    "expected_duration": 275.0,
+    "baseline": {
+      "revision": [
+        "1788073509499984",
+        4844,
+        275.0
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "490b2794-f0c4-4328-a09c-ffc216cfde92",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/490b2794-f0c4-4328-a09c-ffc216cfde92.mp3",
+    "expected_duration": 274.52,
+    "baseline": {
+      "revision": [
+        "1788073450344236",
+        4844,
+        274.52
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "9149c006-d262-4f5b-a4d0-10d03e419f10",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/9149c006-d262-4f5b-a4d0-10d03e419f10.mp3",
+    "expected_duration": 324.96,
+    "baseline": {
+      "revision": [
+        "1788073480647958",
+        4844,
+        324.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "19fefb8b-fb74-4e37-9e56-34889b4431d1",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/19fefb8b-fb74-4e37-9e56-34889b4431d1.mp3",
+    "expected_duration": 316.84,
+    "baseline": {
+      "revision": [
+        "1789542309344898",
+        4844,
+        316.84
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "b94e5e56-3858-40b6-a80e-21d57881e727",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/b94e5e56-3858-40b6-a80e-21d57881e727.mp3",
+    "expected_duration": 206.4,
+    "baseline": {
+      "revision": [
+        "1790060762142802",
+        4844,
+        206.4
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "d8ceb313-5cee-4cae-a926-256e8a59d518",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/d8ceb313-5cee-4cae-a926-256e8a59d518.mp3",
+    "expected_duration": 216.8,
+    "baseline": {
+      "revision": [
+        "1790060794624749",
+        4844,
+        216.8
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  },
+  {
+    "songKey": "1f378056-daf7-42c7-90f0-1ad2240ea9cb",
+    "bucket": "aeonimus-suno-media",
+    "object": "suno/handles/nessihenize/1f378056-daf7-42c7-90f0-1ad2240ea9cb.mp3",
+    "expected_duration": 179.96,
+    "baseline": {
+      "revision": [
+        "1790060726996216",
+        4844,
+        179.96
+      ],
+      "status": "blocked",
+      "reason": "confirmed_truncated_native_mp3"
+    }
+  }
+]

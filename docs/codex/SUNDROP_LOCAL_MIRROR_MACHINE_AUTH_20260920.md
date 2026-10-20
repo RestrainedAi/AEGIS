@@ -1,0 +1,19 @@
+# Local mirror machine authentication — installed 2026-09-20
+
+Owner: Download Vanessa SUNO vault copies task 01a0a158-3b0a-7760-88e9-cbe86118582d. Board AEGIS-LOCAL-AUTH-001. Independent specialist auth_review implemented/reviewed the isolated broker and reviewed local client integration.
+
+Root cause: local scripts used personal gcloud credentials, causing repeated interactive reauthentication. Canonical check_daily.py and the daily automation now use sundrop_storage_auth.py with no personal gcloud/ADC fallback. Working files and acceptance receipts: C:/Users/blahn/Downloads/Vanessa-Vault-decbb81b0b4a344b.
+
+Dedicated reader: sundrop-local-reader@stable-framing-482501-t9.iam.gserviceaccount.com. Conditional objectViewer grants allow exact catalog/meta objects, pooled SUNO lyrics/recovery metadata prefixes, and two Vanessa media handle prefixes. Metadata prefixes are pooled, not account-isolated. IAM before/after receipts are under machine-auth-setup.
+
+Organization policy rejected downloadable service-account keys; it remains enforced and no private service-account key was created. Existing suno-viewer workload identity can impersonate only this reader via the new grant. POST /api/local-mirror/token checks a random client secret against its SHA256 hash with constant-time comparison, then issues fixed-target read-only tokens lasting ten minutes. The local client is Windows current-user DPAPI encrypted, with user/SYSTEM ACL, at C:/Users/blahn/AppData/Local/Sundrop/credentials/local-reader.dpapi. Never log decrypted credentials. Server environment uses SUNDROP_LOCAL_MIRROR_CLIENT_SHA256 and SUNDROP_LOCAL_MIRROR_SERVICE_ACCOUNT; preserve these on future deployments.
+
+Live revision: suno-viewer-00220-nic, 100 percent traffic. Image sha256:1140e46a2fe2d1d88302f98ca3ee15a61e0eed7269fb0f7f1a22564ca5745fee is an isolated overlay on prior live 00218 image sha256:87b22900ce17ddd46755f1982695fa920e32e7b31ae56055ed816c8af44832d8. Unrelated dirty source was not deployed. Active source now includes the additive broker module, server registration and Docker COPY to preserve it on future builds.
+
+Acceptance: ten Python tests and five broker tests pass; server syntax check passes. Canary rejected unauthorized requests with 401, served / and /vault with 200, read real catalog and both-account audio/lyrics, and denied unrelated account media with 403. Production repeated two forced token renewals and these storage reads with CLOUDSDK_CONFIG pointing to an unused path and GOOGLE_APPLICATION_CREDENTIALS to a nonexistent file. Receipt machine-auth-setup/verification.json records identity, counts and statuses, without tokens. IAM role inspection establishes read-only grants; no destructive test performed.
+
+Daily checker succeeded: 2425 songs, no new/absent UUIDs; changed lyrics refs on 4df5762b-a04f-4085-8941-6955bb26e441 and view-count changes remain downstream maintenance. Snapshot E:/_Vanessa sux/___Divorce/_SUNO/Vanessa-SUNO-Library/Catalog/Maintenance/20260920T234111Z-check. Changes routed to sundrop.music owner. Automation updated through Codex tool, preserving discovery/Steward routing, daily 09:00 America/Chicago schedule, and original-preservation rules. Cloud all-account harvest remains 02:00 America/Chicago.
+
+Historical personal-auth scripts are not canonical: adapt acquisition calls to sundrop_storage_auth.get_access_token before reuse. Machine failures must identify the service problem, not ask for routine personal login. This verifies authentication, not full media completeness or the separate browser-focus refresh issue. Known absent/corrupt media remains tracked.
+
+Rollback: return traffic to suno-viewer-00218-4t4; machine maintenance then blocks. Do not silently fall back to personal credentials. Revocation can remove the broker hash or narrow impersonation grant. Rotation must coordinate server hash and encrypted local client. Preserve receipts and originals.

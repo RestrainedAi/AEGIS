@@ -6,7 +6,7 @@ Scope: `SUNO Harvest` only.
 
 ## Rule Zero
 
-Manual harvest runs are expensive. Do not trigger one unless there is a specific question the existing evidence cannot answer.
+Manual harvest runs are expensive. Do not trigger one unless there is a specific question the existing verification record cannot answer.
 
 Use this order:
 
@@ -17,6 +17,16 @@ Use this order:
 5. manually execute only if a run is the smallest high-signal test left
 
 ## Expected Runtime Shape
+
+### Feature owner and release evidence
+
+Apply [Development DNA](DEVELOPMENT_PRINCIPLES.md) under the existing harvest workstream owner. The feature owner coordinates source, storage, runtime, and verification specialists when the change spans those concerns; designate one writer per shared file/contract before parallel work.
+
+Before release, record the active checkout, local change boundary, deployed image/revision, acceptance criteria, relevant pre-deploy checks, and any skipped/manual/unexecuted checks in the [feature brief](templates/FEATURE_BRIEF.md). Use the [existing test framework](../../test/README.md); a passing report with skipped checks does not establish those outcomes.
+
+After release, verify the deployed artifact and the intended stored/export/customer result. Classify partial source coverage separately from runtime failure. Route failed checks back to their owner with evidence and bounded retries; record an external blocker and resumption condition when retrying cannot help. Honor Rule Zero: another manual harvest is justified only by a specific unanswered acceptance check. Do not close a recovery merely because a job exited successfully.
+
+The identities below describe runtime service identity. An operator's `gcloud` login authorizes administration; it is not a daily authentication dependency for the scheduled service.
 
 Job:
 
@@ -32,8 +42,11 @@ Expected env vars:
 2. `WORK_DIR=/app`
 3. `SUNO_MEDIA_BUCKET=gs://aeonimus-suno-media`
 4. `WORKSPACES_BUCKET=gs://aeonimus-workspaces`
-5. `HARVEST_HANDLE=unshakableechos2341`
-6. `HARVEST_MODE=delta`
+5. `HARVEST_MODE=delta`
+
+`HARVEST_HANDLE` and `HARVEST_HANDLES` must be absent from the deployed job.
+The Firestore `sources` registry is the only authority for the nightly account
+scope. A targeted handle filter is allowed only for an explicit recovery run.
 
 Expected secret binding:
 
@@ -125,14 +138,15 @@ Use this only when the manual run is expected to answer a concrete question such
 
 For a healthy run, look for:
 
-1. `STEP 4` rebuild completes
+1. `STEP 5` rebuild completes
 2. `Written ... rows -> latest_catalog_wide.csv`
 3. upload of:
    - `latest_catalog_wide.csv`
    - `latest_catalog_wide.meta.json`
-4. execution completion / exit `0`
-5. Vault freshness advances or remains current
-6. Step 5 writes `pipeline_monitor_status.json`
+4. `STEP 5b` catalog and published-storage contract checks pass
+5. execution completion / exit `0`
+6. Vault freshness advances or remains current
+7. Step 6 writes `pipeline_monitor_status.json`
 
 ## Step 5 Status Artifact
 
@@ -165,7 +179,7 @@ These log lines are noisy but not necessarily fatal:
 3. `thumb not captured`
 4. `Task was destroyed but it is pending!`
 
-Treat these as warnings unless the run actually fails before export or exits nonzero.
+These can be nonfatal execution warnings, but missing required media or unresolved source coverage still means feature acceptance is incomplete. Record the affected items, responsible owner, and next recovery action. A successful export or exit zero does not prove the missing artifacts were recovered.
 
 Fatal indicators are things like:
 
@@ -173,6 +187,15 @@ Fatal indicators are things like:
 2. export upload never happens
 3. Cloud Run execution status is failed
 4. container exits nonzero
+
+## August 18 Baseline
+
+Generation `39` was the August 18 harvest baseline. Execution `suno-harvest-67wdf`
+completed successfully in approximately seven minutes, with no retry, after
+the optional-MP4 repair policy was enabled. It passed both contract checks and
+reported a fresh published catalog. Retain this dated evidence for comparison;
+verify the current deployed generation and latest accepted evidence before
+making a release decision. This documentation update does not revalidate live state.
 
 ## Current Operator Split
 
@@ -184,3 +207,19 @@ Use:
    - authoritative Cloud Shell / bash redeploy path
 
 Do not treat ad hoc inline `gcloud run jobs update --set-env-vars ...` commands as authoritative for this job.
+
+## Active Source Lifecycle
+
+The scheduler harvests only source records where `platform=suno`, `isActive`
+and `harvestEnabled` are true, and `status` is not `inactive`, `disabled`, or
+`archived`. An unavailable or empty registry is a hard failure: the job must
+not infer a fallback account list. This preserves archived customer history
+without accidentally restarting collection for a former customer.
+
+For an account whose public profile is readable but whose private or link-only
+library is not connected through an approved provider, publish only the
+authoritative public snapshot and report the account as `partial_source`.
+Do not infer removal from that profile: removal mutation requires both
+`ingestionMode=owned_library` or `official_export` and
+`authorityStatus=verified` on the source document. If any active source read
+fails, defer all removal mutations for the run.

@@ -146,6 +146,13 @@ Date: 2026-04-14
 - Downloads request flow is still heavier on full-catalog packaging than it is on song-level or selected-song requests, so the next UX pass should make it much clearer what scope the user is asking to prepare before they click
 - non-interactive `gcloud` inspection in the Codex shell is still inconsistent even after local reauth, so operational proof should continue to prefer captured Cloud Run logs and artifact metadata unless the shell token path is confirmed healthy again
 
+## Repo hygiene note
+
+- on 2026-04-23, the oversized `data/exports/vanessa_unshakableechos2341_2026-04-15/` payloads were removed from git history and the repo was garbage-collected
+- repo object storage dropped from roughly `9.48 GiB` to about `23.58 MiB`
+- the follow-up force-push succeeded, which confirms the generated export payload history was the main cause of the repeated push failures
+- active Codex planning docs in `docs/` were preserved and intentionally left outside that cleanup
+
 ## Board alignment
 
 - `AEGIS-030` can be treated as complete for the main protected-media console flood problem

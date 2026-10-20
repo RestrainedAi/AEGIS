@@ -71,8 +71,8 @@ required = {
     "WORK_DIR": "/app",
     "SUNO_MEDIA_BUCKET": "gs://aeonimus-suno-media",
     "WORKSPACES_BUCKET": "gs://aeonimus-workspaces",
-    "HARVEST_HANDLE": "vanessa_primary",
     "HARVEST_MODE": "delta",
+    "REPAIR_OPTIONAL_VIDEO": "false",
 }
 service_account = tmpl.get("serviceAccountName")
 if service_account != "cloud-run-jobs@stable-framing-482501-t9.iam.gserviceaccount.com":
@@ -96,6 +96,17 @@ print("  ✓ Runtime service account verified")
 print("  ✓ Expected env vars verified")
 print("  ✓ MONITOR_CONFIG secret binding verified")
 PY
+
+  PROJECT_NUMBER="$(gcloud projects describe "${PROJECT}" --format='value(projectNumber)')"
+  SERVICE_AGENT="service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
+  if ! gcloud projects get-iam-policy "${PROJECT}" \
+      --flatten="bindings[].members" \
+      --filter="bindings.role=roles/artifactregistry.reader AND bindings.members=serviceAccount:${SERVICE_AGENT}" \
+      --format='value(bindings.members)' | grep -q "${SERVICE_AGENT}"; then
+    echo "ERROR: Cloud Run service agent lacks Artifact Registry reader access: ${SERVICE_AGENT}" >&2
+    exit 1
+  fi
+  echo "  ✓ Artifact Registry reader verified for ${SERVICE_AGENT}"
 }
 
 # ── Step 1: Verify required files ─────────────────────────────────────────────
@@ -109,7 +120,11 @@ REQUIRED_FILES=(
     "firestore_upsert.py"
     "gcp_access_token.py"
     "enrich_suno_metadata_from_studio_api.py"
+    "backfill_lyrics_artifacts.py"
     "rebuild_catalog.py"
+    "validate_suno_export_contract.py"
+    "validate_published_catalog_export.py"
+    "fixtures/suno_export_contract_fixture.json"
     "pipeline_monitor.py"
     "requirements.txt"
     "cloudbuild.harvest.yaml"
@@ -222,8 +237,8 @@ PROJECT: "${PROJECT}"
 WORK_DIR: "/app"
 SUNO_MEDIA_BUCKET: "gs://aeonimus-suno-media"
 WORKSPACES_BUCKET: "gs://aeonimus-workspaces"
-HARVEST_HANDLE: "vanessa_primary"
 HARVEST_MODE: "delta"
+REPAIR_OPTIONAL_VIDEO: "false"
 YAML
 
 echo "  ✓ Wrote env vars file: ${ENV_VARS_FILE}"

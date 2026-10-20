@@ -13,6 +13,10 @@ If a scratch note, chat summary, old handoff, or partial runbook disagrees with 
 
 ## Current Operating Note
 
+### Development principles and feature ownership
+
+Use [Development DNA](DEVELOPMENT_PRINCIPLES.md) for Sequence -> Conditional -> Loop, accountable feature owners, specialized teams, focused context, handoffs, and completion evidence. The repository `AGENTS.md` is the agent entry point; [the feature brief](templates/FEATURE_BRIEF.md) records the working contract. Existing [workstream ownership and change control](AEGIS_Workstream_Ownership_And_Change_Control.md) continues to govern named roles and single-writer surfaces.
+
 Some values in this file are intentionally temporary.
 
 They are still authoritative now because they reflect the current real operating split, even if we expect them to change later during:
@@ -237,6 +241,15 @@ Use it for:
 - future anomaly handling policy
 
 ## Fast Lookup
+
+### Development workflow authority
+
+- [Development DNA](DEVELOPMENT_PRINCIPLES.md): execution principles, feature accountability, specialist context and handoffs, acceptance-based closure.
+- [Workstream ownership](AEGIS_Workstream_Ownership_And_Change_Control.md): named role and shared-surface write boundaries.
+- [Delivery board](../board/README.md): recorded task state and mapping partial outcomes to existing statuses.
+- [Feature test framework](../../test/README.md): runner behavior and pre/post-deploy evidence; skipped checks remain unverified.
+- [Feature brief](templates/FEATURE_BRIEF.md): per-feature assignments, dependencies, evidence, and resumption conditions.
+- [Documentation alignment record](DEVELOPMENT_DOCS_ALIGNMENT_2026-09-20.md): scope and verification of the September 20 documentation update; not a runtime health report.
 
 If the question is:
 

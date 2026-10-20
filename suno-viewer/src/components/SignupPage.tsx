@@ -40,7 +40,7 @@ export default function SignupPage() {
               sundrop
             </a>
             <div style={brandDividerStyle} />
-            <span style={brandKickerStyle}>Sovereign onboarding</span>
+            <span style={brandKickerStyle}>Music platform onboarding</span>
           </div>
 
           <nav style={navStyle} aria-label="Primary">
@@ -73,8 +73,8 @@ export default function SignupPage() {
             migration path later.
           </h1>
           <p style={heroLeadStyle}>
-            We are curating a select cohort of visionaries to stress-test the Sovereign Shell.
-            Entry is manually reviewed to keep the cloud side calm and the harvest side separate.
+            We are curating a small beta group to test music catalog, publishing, and security workflows.
+            Entry is manually reviewed so account setup, workspace access, and source connections stay clean.
           </p>
         </section>
 
@@ -127,7 +127,7 @@ export default function SignupPage() {
             </section>
 
             <section style={sectionBlockStyle}>
-              <h2 style={sectionHeadingStyle}>System entry protocol</h2>
+              <h2 style={sectionHeadingStyle}>Account setup steps</h2>
               <div style={stepsListStyle}>
                 {accessSteps.map((step) => (
                   <article key={step.id} style={stepRowStyle}>
@@ -145,8 +145,8 @@ export default function SignupPage() {
               <article style={supportCardStyle}>
                 <p style={supportKickerStyle}>What stays separate</p>
                 <p style={supportBodyStyle}>
-                  Beta data streams remain isolated from production shards so migration stays clean
-                  when public release opens.
+                  Beta workspaces stay separated from broader release traffic so account setup and
+                  catalog security can be reviewed carefully before rollout expands.
                 </p>
               </article>
               <article style={supportCardStyle}>
@@ -169,9 +169,9 @@ export default function SignupPage() {
 
         <section style={footerNoteStyle}>
           <div style={footerNoteLineStyle}>
-            <span>sundrop handles access and publishing.</span>
-            <span>sundrop music handles harvest and source tools.</span>
-            <span>The vault stays separate.</span>
+            <span>sundrop handles account access and publishing.</span>
+            <span>sundrop music handles source intake and catalog tools.</span>
+            <span>The Vault keeps files and exports secured.</span>
           </div>
           <div style={footerMetaStyle}>
             {footerTiers.map((tier) => (

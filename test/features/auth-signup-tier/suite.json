@@ -1,0 +1,45 @@
+{
+  "featureId": "auth-signup-tier",
+  "title": "Auth, Signup, and Tier Entitlements",
+  "module": "suno-viewer",
+  "deployPhase": "both",
+  "scopeTicket": "signup, studio-monthly tier, vault.browse entitlements",
+  "wireframeRef": "test/FEATURE_MODULE_CATALOG.md#module-8-auth-signup--tier-entitlements",
+  "steps": [
+    {
+      "id": "AS-01",
+      "title": "Viewer production build (auth pages compile)",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "npm run build",
+      "timeoutMs": 600000,
+      "onFail": {
+        "suggestions": [
+          "Fix TypeScript errors in LoginPage, SignupPage, AuthControls, firebaseAuth.tsx"
+        ]
+      }
+    },
+    {
+      "id": "AS-02",
+      "title": "Public signup route serves on canonical domain",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/signup",
+      "expectStatus": [200, 301, 302, 307, 308]
+    },
+    {
+      "id": "AS-03",
+      "title": "Manual signup and tier entitlement checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Open /signup and submit beta or studio request with SUNO handle",
+        "Admin approves request in Control Center with correct plan/tier",
+        "Approved user login exposes vault.browse and export entitlements",
+        "Disabled actions remain hidden for lower tiers"
+      ]
+    }
+  ]
+}

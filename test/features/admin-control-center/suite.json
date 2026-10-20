@@ -1,0 +1,58 @@
+{
+  "featureId": "admin-control-center",
+  "title": "Admin Control Center and Operational Visibility",
+  "module": "suno-viewer",
+  "deployPhase": "both",
+  "scopeTicket": "AEGIS-009, EPIC-13 monitoring",
+  "wireframeRef": "test/FEATURE_MODULE_CATALOG.md#module-9-admin-control-center",
+  "steps": [
+    {
+      "id": "AC-01",
+      "title": "Freshness summary unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --test test/freshness-utils.test.js",
+      "onFail": {
+        "suggestions": [
+          "Review freshness-utils healthy/stale/mismatch classifications",
+          "Align AdminControlCenter freshness banner with helper output"
+        ]
+      }
+    },
+    {
+      "id": "AC-02",
+      "title": "Pipeline monitor status validator",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python validate_pipeline_monitor_status.py",
+      "onFail": {
+        "suggestions": [
+          "Review pipeline_monitor.build_status_summary thresholds used by post-harvest digest"
+        ]
+      }
+    },
+    {
+      "id": "AC-03",
+      "title": "Control Center route responds post-deploy",
+      "type": "http",
+      "deployPhase": "post-deploy",
+      "method": "HEAD",
+      "url": "https://sundrop.cloud/control-center",
+      "expectStatus": [200, 301, 302, 307, 308, 401, 403]
+    },
+    {
+      "id": "AC-04",
+      "title": "Manual admin approval and overview checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Platform admin opens /control-center and sees overview metrics",
+        "Pending access requests queue is visible and actionable",
+        "Approve/deny updates Firestore and user session entitlements",
+        "Export freshness indicator matches latest_catalog_wide.meta.json"
+      ]
+    }
+  ]
+}

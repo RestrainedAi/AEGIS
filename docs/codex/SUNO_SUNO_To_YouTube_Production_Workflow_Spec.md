@@ -10,6 +10,14 @@ Unless explicitly labeled as "Observed", "Current", or "Current State", workflow
 
 ## Executive Summary
 
+### Development and verification policy (September 20, 2026)
+
+The component descriptions below are a repository design baseline, not a fresh production audit. Use the [master authority map](AEGIS_MASTER_SOURCE_OF_TRUTH.md) and current evidence for runtime decisions.
+
+Feature delivery follows [Development DNA](DEVELOPMENT_PRINCIPLES.md): one accountable owner per feature, specialized tasks for large features, focused context, and single-writer handoffs across ingestion, storage, catalog, and publishing. Sequence dependencies, branch on observed outcomes, then repair and verify unmet acceptance checks within explicit retry limits.
+
+For each feature, record the actual applicable stages in a [feature brief](templates/FEATURE_BRIEF.md): discovered -> downloaded -> validated -> stored -> integrated -> published -> customer-path verified. Here catalog publication and YouTube publication are distinct operations; this documentation is not authorization to publish customer content to YouTube. A passed stage does not prove the remaining stages or complete private-source coverage. Disclose partial results and skipped checks before closure.
+
 The repository contains most of the pieces required for a full SUNO-to-YouTube pipeline, but they are not fully joined into one production-safe flow.
 
 The strongest current implementation is:

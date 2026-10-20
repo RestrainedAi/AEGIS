@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { AccessRequest, AdminOverview, WorkspaceRole } from '../types'
-import { authFetch } from '../lib/firebaseAuth'
+import { authFetch, useAuth } from '../lib/firebaseAuth'
 import { signupCatalog, signupCatalogById } from '../lib/signupCatalog'
 import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -32,6 +32,7 @@ function isAccessBoundaryMessage(message: string) {
 
 export default function AdminControlCenter() {
   const isCompact = useMediaQuery('(max-width: 920px)')
+  const { clientReady, loadingSession, token } = useAuth()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [actionNotice, setActionNotice] = useState('')
   const [approvalDrafts, setApprovalDrafts] = useState<Record<string, ApprovalDraft>>({})
@@ -39,9 +40,16 @@ export default function AdminControlCenter() {
   useEffect(() => {
     let cancelled = false
 
+    if (!clientReady || loadingSession) {
+      setState({ status: 'loading' })
+      return () => {
+        cancelled = true
+      }
+    }
+
     async function load() {
       try {
-        const response = await authFetch('/api/admin/overview', { cache: 'no-store' })
+        const response = await authFetch('/api/admin/overview', { cache: 'no-store', token })
         const payload = await response.json()
         if (!response.ok || !payload?.ok) {
           throw new Error(payload?.error || `HTTP ${response.status}`)
@@ -63,7 +71,7 @@ export default function AdminControlCenter() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [clientReady, loadingSession, token])
 
   const accessRequestDraft = (request: AccessRequest): ApprovalDraft => {
     const tier = signupCatalogById[request.requestedTier || 'artist']
@@ -323,16 +331,41 @@ export default function AdminControlCenter() {
 
             <article style={summaryPanelLayoutStyle}>
               <h2 style={sectionTitleStyle}>Export freshness</h2>
-              <p style={metricStyle}>{state.data.exportArtifact.generatedAt || 'No export timestamp yet'}</p>
+              <p style={metricStyle}>{state.data.exportFreshness.label}</p>
+              <p style={bodyStyle}>
+                Last export: <strong>{state.data.exportArtifact.generatedAt || 'No export timestamp yet'}</strong>
+              </p>
+              <p style={bodyStyle}>{state.data.exportFreshness.detail}</p>
               <p style={bodyStyle}>
                 Rows: <strong>{state.data.exportArtifact.rowCount || 0}</strong>
               </p>
+              <p style={bodyStyle}>
+                Served rows: <strong>{state.data.exportFreshness.servedRowCount || 0}</strong>
+              </p>
+              {state.data.exportFreshness.newestServedCreatedAt && (
+                <p style={bodyStyle}>
+                  Newest served song: <strong>{state.data.exportFreshness.newestServedCreatedAt}</strong>
+                </p>
+              )}
+              {state.data.exportFreshness.latestSourceCreatedAt && (
+                <p style={bodyStyle}>
+                  Newest source song: <strong>{state.data.exportFreshness.latestSourceCreatedAt}</strong>
+                </p>
+              )}
+              {state.data.latestSourceSong?.title && (
+                <p style={bodyStyle}>
+                  Source lead title: <strong>{state.data.latestSourceSong.title}</strong>
+                </p>
+              )}
               <p style={bodyStyle}>
                 Generator: <strong>{state.data.exportArtifact.generator || 'unknown'}</strong>
               </p>
               <p style={bodyStyle}>
                 Artifact: <code style={codeStyle}>{state.data.exportArtifact.object}</code>
               </p>
+              {state.data.exportFreshness.status !== 'healthy' && (
+                <p style={warningStyle}>Freshness warning: {state.data.exportFreshness.status}</p>
+              )}
             </article>
 
             <article style={summaryPanelLayoutStyle}>

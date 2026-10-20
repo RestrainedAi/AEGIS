@@ -19,7 +19,7 @@ from gcp_access_token import get_access_token
 PROJECT = "stable-framing-482501-t9"
 DATABASE = "(default)"
 BASE_DOCS = f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/{DATABASE}/documents/sunoSongs"
-TRACKED_HANDLES = ("unshakableechos2341", "genxdreams")
+TRACKED_HANDLES = ("unshakableechos2341", "nessihenize", "genxdreams")
 MANIFEST_PATHS = [
     os.path.join(os.path.dirname(__file__), "delta_manifest.csv"),
     os.path.join(os.path.dirname(__file__), "suno_manifest.csv"),

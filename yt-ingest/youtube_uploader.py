@@ -15,10 +15,18 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+
+from account_labels import canonical_account_label
+from youtube_publish_channels import (
+    DEFAULT_PUBLISH_CHANNEL,
+    oauth_secret_for_channel,
+    resolve_publish_channel,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 PROJECT         = "stable-framing-482501-t9"
@@ -44,6 +52,21 @@ YT_SCOPE_CAPTIONS = "https://www.googleapis.com/auth/youtube.force-ssl"
 _ID11 = re.compile(r'^[A-Za-z0-9_-]{11}$')
 _LANG_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
 _PUBLISH_TAG_WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'&+._-]*")
+_YOUTUBE_TEXT_REPLACEMENTS = str.maketrans({
+    "\u00a0": " ",
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2015": "-",
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2022": "-",
+    "\u2026": "...",
+})
 
 
 def http_error_detail(err: urllib.error.HTTPError) -> str:
@@ -103,11 +126,14 @@ def get_secret(gcp_token: str, secret_id: str) -> str:
     return base64.b64decode(data["payload"]["data"]).decode("utf-8")
 
 
-def get_youtube_token(gcp_token: str) -> str:
+def get_youtube_token(gcp_token: str, publish_channel: str = DEFAULT_PUBLISH_CHANNEL) -> str:
     """Exchange refresh token for a YouTube API access token."""
     client_secrets = json.loads(get_secret(gcp_token, SECRET_CLIENT))
     installed = client_secrets.get("installed") or client_secrets.get("web")
-    refresh_token = get_secret(gcp_token, SECRET_OAUTH).strip()
+    secret_id = oauth_secret_for_channel(publish_channel)
+    refresh_token = get_secret(gcp_token, secret_id).strip()
+    if not refresh_token:
+        raise RuntimeError(f"YouTube refresh token secret is empty: {secret_id}")
 
     body = urllib.parse.urlencode({
         "client_id":     installed["client_id"],
@@ -117,8 +143,25 @@ def get_youtube_token(gcp_token: str) -> str:
     }).encode()
     req = urllib.request.Request(YT_TOKEN_URL, data=body, method="POST",
                                   headers={"Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())["access_token"]
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())["access_token"]
+    except urllib.error.HTTPError as e:
+        detail = http_error_detail(e)
+        raise RuntimeError(
+            f"YouTube token exchange failed for channel={publish_channel} secret={secret_id}: {detail}"
+        ) from e
+
+
+def resolve_publish_channel_for_doc(doc: dict, queue_doc: dict | None = None) -> str:
+    queued = queue_val(queue_doc, "ytPublishChannel")
+    if queued:
+        return queued
+    return resolve_publish_channel(
+        account_label=fs_val(doc, "account_label") or canonical_account_label(fs_val(doc, "handle")),
+        account_handle=fs_val(doc, "account_handle") or fs_val(doc, "handle"),
+        source_id=fs_val(doc, "account_sourceId") or fs_val(doc, "sourceId"),
+    )
 
 
 def get_token_scopes(access_token: str) -> set[str]:
@@ -374,11 +417,11 @@ def dedupe_keep_order(values: list[str]) -> list[str]:
 
 
 def normalize_whitespace(value: str | None) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return re.sub(r"\s+", " ", sanitize_youtube_text(value, multiline=False)).strip()
 
 
 def normalize_multiline(value: str | None) -> str:
-    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").replace("\\n", "\n")
+    text = sanitize_youtube_text(value, multiline=True).replace("\r\n", "\n").replace("\r", "\n").replace("\\n", "\n")
     lines = [line.rstrip() for line in text.split("\n")]
     cleaned: list[str] = []
     blank = False
@@ -392,6 +435,52 @@ def normalize_multiline(value: str | None) -> str:
         cleaned.append(stripped)
         blank = False
     return "\n".join(cleaned).strip()
+
+
+def sanitize_youtube_text(
+    value: str | None,
+    *,
+    multiline: bool,
+    strict_ascii: bool = False,
+) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).translate(_YOUTUBE_TEXT_REPLACEMENTS)
+    cleaned_chars: list[str] = []
+    for char in text:
+        category = unicodedata.category(char)
+        if char in {"\n", "\r", "\t"}:
+            cleaned_chars.append(char if multiline else " ")
+            continue
+        if category.startswith("C"):
+            continue
+        cleaned_chars.append(char)
+    cleaned = "".join(cleaned_chars)
+    if strict_ascii:
+        cleaned = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("ascii")
+    return cleaned
+
+
+def sanitize_youtube_tags(tags: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for tag in tags:
+        normalized = normalize_whitespace(sanitize_youtube_text(tag, multiline=False, strict_ascii=True))
+        if normalized:
+            cleaned.append(normalized[:30])
+    return dedupe_keep_order(cleaned)[:15]
+
+
+def sanitize_youtube_description(value: str, *, strict_ascii: bool = False) -> str:
+    text = sanitize_youtube_text(value, multiline=True, strict_ascii=strict_ascii)
+    text = normalize_multiline(text)
+    return text[:5000]
+
+
+def fallback_publish_description(doc: dict, song_key: str) -> str:
+    title = normalize_whitespace(fs_val(doc, "title") or song_key)
+    styles = [normalize_whitespace(style) for style in derive_publish_styles(doc)[:6] if normalize_whitespace(style)]
+    sections = [title] if title else [song_key]
+    if styles:
+        sections.append(f"Styles: {', '.join(styles)}")
+    return sanitize_youtube_description("\n\n".join(sections), strict_ascii=True)
 
 
 def derive_publish_title(doc: dict, song_key: str, queue_doc: dict | None = None) -> str:
@@ -644,7 +733,16 @@ def build_yt_metadata(
     override_altered = qval("ytAlteredContent", "booleanValue", None)
     override_shorts  = qval("ytShortsRemixing", "booleanValue", None)
 
-    final_description = description[:5000]
+    final_title = normalize_whitespace(
+        sanitize_youtube_text(title, multiline=False, strict_ascii=minimal)
+    )[:100] or song_key[:100]
+    final_description = (
+        fallback_publish_description(doc, song_key)
+        if minimal
+        else sanitize_youtube_description(description, strict_ascii=False)
+    )
+    if not final_description:
+        final_description = fallback_publish_description(doc, song_key)
     final_privacy     = normalized_privacy(override_privacy)
     final_category    = normalized_category(override_cat)
     final_license     = normalized_license(override_license)
@@ -656,7 +754,7 @@ def build_yt_metadata(
 
     metadata = {
         "snippet": {
-            "title":           title[:100],
+            "title":           final_title,
             "description":     final_description,
             "categoryId":      final_category,
         },
@@ -667,7 +765,7 @@ def build_yt_metadata(
     }
 
     if not minimal:
-        metadata["snippet"]["tags"] = tags
+        metadata["snippet"]["tags"] = sanitize_youtube_tags(tags)
         metadata["snippet"]["defaultLanguage"] = final_language
         metadata["status"]["selfDeclaredMadeForKids"] = False
         metadata["status"]["license"] = final_license
@@ -738,12 +836,14 @@ def upload_clip(
 
     # 1 — Fetch Firestore sunoSongs doc
     doc = fs_get(gcp_token, song_key)
+    publish_channel = resolve_publish_channel_for_doc(doc, queue_doc)
+    print(f"  publish_channel={publish_channel}")
 
     # ── Duplicate-upload guard ────────────────────────────────────────────────
     # If a durable YouTube result already exists, skip to prevent duplicates.
     existing_yt_id, existing_canonical = existing_uploaded_video(doc)
     if existing_yt_id and not dry_run:
-        yt_token = get_youtube_token(gcp_token)
+        yt_token = get_youtube_token(gcp_token, publish_channel)
         patch_fields = {
             "ytStatus": {"stringValue": "done"},
             "ytError": {"stringValue": ""},
@@ -791,7 +891,7 @@ def upload_clip(
 
     try:
         # 3 — Get YouTube token
-        yt_token = get_youtube_token(gcp_token)
+        yt_token = get_youtube_token(gcp_token, publish_channel)
 
         # 4 — Download media from GCS
         print("  downloading media from GCS...")

@@ -16,6 +16,10 @@ This document is the direct coding handoff from product planning into engineerin
 
 Before coding, use these docs as the baseline:
 
+First read the current [agent instructions](../../AGENTS.md), [Development DNA](DEVELOPMENT_PRINCIPLES.md), [master authority map](AEGIS_MASTER_SOURCE_OF_TRUTH.md), and [workstream ownership](AEGIS_Workstream_Ownership_And_Change_Control.md). Give each feature one accountable owner, with bounded specialists for large features; record the actual current agent assignment rather than assuming Fermat or another historical name is active.
+
+Use the [feature brief](templates/FEATURE_BRIEF.md) and [test handoff workflow](../../test/README.md) for dependency order, conditional decisions, bounded repair loops, and verified integration. The first-wave recommendations below are preserved planning history; revalidate their implementation assumptions against the active checkout, deployed revision, and existing board before acting.
+
 1. `README.md`
 2. `SUNO_Youtube_Pipeline_Repo_Overview.md`
 3. `SUNO_SUNO_To_YouTube_Production_Workflow_Spec.md`

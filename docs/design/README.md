@@ -2,7 +2,13 @@
 
 This folder contains the current AEGIS future-state UX documentation set.
 
-## Files
+## Feature design handoff
+
+Use [Development DNA](../codex/DEVELOPMENT_PRINCIPLES.md) and a linked [feature brief](../codex/templates/FEATURE_BRIEF.md). A feature has one accountable owner; large features may have separate design, implementation, and verification specialists. Give each the relevant requirements, source artifacts, constraints, and acceptance checks. Preserve the single-writer boundaries in [workstream ownership](../codex/AEGIS_Workstream_Ownership_And_Change_Control.md).
+
+A design handoff includes observable customer behavior, loading/empty/partial/failure states, accessibility requirements, interfaces, and unresolved decisions. The owner sequences dependent work, returns failed checks with evidence, and verifies the integrated customer path. A wireframe, generated screen, or specialist's final message does not by itself establish implemented or tested behavior.
+
+### Design documents
 
 - `aegis-ui-ux-strategy-memo.md`
   - Executive direction, information architecture, navigation model, screen concepts, status model, visual system, and phased delivery guidance.

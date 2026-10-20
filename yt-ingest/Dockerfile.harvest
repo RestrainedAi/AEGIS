@@ -3,7 +3,7 @@ WORKDIR /app
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        apt-transport-https ca-certificates gnupg curl && \
+        apt-transport-https ca-certificates gnupg curl ffmpeg && \
     curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
         | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
@@ -18,13 +18,25 @@ RUN playwright install chromium
 
 COPY build_manifest_from_studio_api.py .
 COPY download_media_gcs.py .
+COPY audio_integrity.py .
+COPY media_validation_receipts.py .
 COPY delta_check_firestore.py .
 COPY catalog_sync_firestore_multi.py .
 COPY firestore_upsert.py .
 COPY gcp_access_token.py .
 COPY enrich_suno_metadata_from_studio_api.py .
+COPY backfill_lyrics_artifacts.py .
+COPY account_labels.py .
+COPY youtube_publish_channels.py .
 COPY rebuild_catalog.py .
+COPY validate_suno_export_contract.py .
+COPY validate_published_catalog_export.py .
+COPY fixtures/suno_export_contract_fixture.json fixtures/suno_export_contract_fixture.json
 COPY pipeline_monitor.py .
+COPY post_harvest_audio_gaps.py .
+COPY fixtures/post_harvest_audio_gaps.json fixtures/post_harvest_audio_gaps.json
+COPY harvest_completion.py .
+COPY mirror_dispatch.sh .
 COPY entrypoint.sh .
 
 RUN sed -i 's/\r//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
@@ -34,7 +46,8 @@ ENV WORK_DIR=/app
 ENV PROJECT=stable-framing-482501-t9
 ENV SUNO_MEDIA_BUCKET=gs://aeonimus-suno-media
 ENV WORKSPACES_BUCKET=gs://aeonimus-workspaces
-ENV HARVEST_HANDLE=vanessa_primary
 ENV HARVEST_MODE=delta
 
-CMD ["/app/entrypoint.sh"]
+RUN sed -i 's/\r//' /app/mirror_dispatch.sh && chmod +x /app/mirror_dispatch.sh
+ENTRYPOINT ["/app/mirror_dispatch.sh"]
+CMD []

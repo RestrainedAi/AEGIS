@@ -1,0 +1,62 @@
+{
+  "featureId": "downloads-export",
+  "title": "Downloads and Export Packaging",
+  "module": "suno-viewer",
+  "deployPhase": "pre-deploy",
+  "scopeTicket": "AEGIS-001, AEGIS-009, export center",
+  "wireframeRef": "docs/codex/AEGIS_EXPORT_RUNTIME_VALIDATION_2026-04-06.md",
+  "steps": [
+    {
+      "id": "DE-01",
+      "title": "Export utils unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --test test/export-utils.test.js",
+      "onFail": {
+        "suggestions": [
+          "Review export-utils customer CSV shaping and artifact presence helpers",
+          "Ensure internal GCS/YouTube columns are stripped from customer manifests"
+        ]
+      }
+    },
+    {
+      "id": "DE-02",
+      "title": "Catalog export utils unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --test test/catalog-export-utils.test.js",
+      "onFail": {
+        "suggestions": [
+          "Review catalog-export-utils job serialization and download URL helpers"
+        ]
+      }
+    },
+    {
+      "id": "DE-03",
+      "title": "Export contract validator (yt-ingest rebuild mapping)",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "yt-ingest",
+      "command": "python validate_suno_export_contract.py",
+      "onFail": {
+        "suggestions": [
+          "Align rebuild_catalog.py export row mapping with fixture contract"
+        ]
+      }
+    },
+    {
+      "id": "DE-04",
+      "title": "Manual export packaging smoke checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Single-song export completes and downloads ZIP + CSV + JSON summary",
+        "Selected-songs export completes for a 24-song page baseline",
+        "Full-catalog export reaches ready state and ZIP parts download",
+        "Missing-file counts in summary are plausible"
+      ]
+    }
+  ]
+}

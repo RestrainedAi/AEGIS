@@ -66,6 +66,7 @@ Date: 2026-04-15
   - no fake `0 B` package metrics when nothing was actually packaged
   - no one-option workspace picker in the single-workspace case
   - the full-workspace request path now reads more clearly as `Prepare full catalog package`
+- on 2026-04-23, the old tracked Vanessa export ZIP payloads were also removed from git history entirely so generated download artifacts stop bloating repo pushes
 
 ## Next recommended follow-up
 

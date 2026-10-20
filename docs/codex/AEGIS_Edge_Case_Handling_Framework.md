@@ -30,6 +30,12 @@ If the same kind of failure happens more than once, it should usually be promote
 
 ## The Five-Step Model
 
+### Owner, conditional decision, and recovery loop
+
+Apply [Development DNA](DEVELOPMENT_PRINCIPLES.md): the accountable feature owner assigns a focused specialist to investigate each bounded failure class and a designated writer to change the affected surface. Hand over source observations, relevant constraints, contradictory evidence, and acceptance checks; do not transmit an assumed root cause as fact.
+
+Classify success, partial success, retryable failure, unavailable source, and external blocker explicitly. Preserve successful results and original data while isolating failed items. Set retry/time limits and backoff; record a resumption condition instead of repeatedly retrying unchanged failures. Closure requires verifying the recovered data/artifact in the integrated product path, with unresolved items and skipped checks disclosed in the [feature brief](templates/FEATURE_BRIEF.md).
+
 ### 1. Detect early
 
 Catch the condition as close to the source of truth as possible.

@@ -13,6 +13,12 @@ This folder is the canonical documentation set produced from a direct crawl of t
 
 ### Repo and Workflow
 
+- [Development DNA](DEVELOPMENT_PRINCIPLES.md)
+- [Feature brief template](templates/FEATURE_BRIEF.md)
+- [Feature test framework](../../test/README.md)
+- [Delivery board and owner/status mapping](../board/README.md)
+- [Documentation alignment record](DEVELOPMENT_DOCS_ALIGNMENT_2026-09-20.md)
+
 - `SUNO_Youtube_Pipeline_Repo_Overview.md`
 - `SUNO_SUNO_To_YouTube_Production_Workflow_Spec.md`
 

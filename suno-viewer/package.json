@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "serve": "node server.js"
+    "serve": "node server.js",
+    "test": "node --test test/**/*.test.js"
   },
   "dependencies": {
     "@dataconnect/generated": "file:src/dataconnect-generated",

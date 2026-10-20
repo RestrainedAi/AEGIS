@@ -10,7 +10,7 @@ Reads delta_manifest.csv and for each row:
   3. Accepts .m4a as audio fallback if .mp3 stream is unavailable
   4. Streams intercepted bytes directly into GCS via gsutil cp
   5. Uses gsutil cp -n (no-clobber) for full idempotency
-     (GCS versioning is enabled; -n stacks new version, never overwrites)
+     (existing objects are skipped; -n does not create a new version)
  
 GCS canonical path: gs://aeonimus-suno-media/suno/handles/{handle}/{clip_id}.{ext}
  
@@ -28,7 +28,8 @@ import subprocess
 import tempfile
 import time
 import shutil
-from firestore_upsert import upsert_song_after_download
+from firestore_upsert import upsert_song_after_download, update_song_metadata_only
+from audio_integrity import InvalidAudio, expected_duration, validate_audio, validate_video
 import urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
@@ -46,6 +47,12 @@ CURL_BIN     = shutil.which("curl") or shutil.which("curl.exe") or "curl"
 INTERCEPT_TIMEOUT_MS = 30_000
 # Retry attempts per clip before giving up
 MAX_RETRIES = 3
+# Historic video-only repairs are optional work. Keep the daily catalog path
+# responsive by deferring those rows to the dedicated repair run unless an
+# operator explicitly enables them.
+REPAIR_OPTIONAL_VIDEO = os.environ.get("REPAIR_OPTIONAL_VIDEO", "false").strip().lower() in {
+    "1", "true", "yes", "on"
+}
  
  
 # -- GCS helpers --------------------------------------------------------------
@@ -76,6 +83,18 @@ def gcs_path(handle: str, clip_id: str, ext: str) -> str:
     return f"{BUCKET}/suno/handles/{handle}/{clip_id}.{ext}"
 
 
+def should_defer_optional_video_repair(reason: str, need_audio: bool, need_thumb: bool) -> bool:
+    """Keep a legacy MP4-only repair from delaying the catalog publication path."""
+    normalized_reason = str(reason or "").strip().lower()
+    return (
+        not REPAIR_OPTIONAL_VIDEO
+        and normalized_reason.startswith("missing_gcs:")
+        and normalized_reason.split(":", 1)[1].split(",") == ["mp4"]
+        and not need_audio
+        and not need_thumb
+    )
+
+
 def gs_is_zero_byte(gs_uri: str) -> bool:
     r = subprocess.run([GSUTIL_BIN, "stat", gs_uri], capture_output=True, text=True)
     if r.returncode != 0:
@@ -89,20 +108,59 @@ def gs_is_zero_byte(gs_uri: str) -> bool:
     return False
  
  
-def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None) -> bool:
-    """
-    Stream a URL directly into GCS using:
-      curl -L -f [headers] URL | gsutil cp -n - gs_uri
-    -n flag: no-clobber -- skip if object already exists (idempotent with versioning).
-    Returns True on success.
-    """
-    overwrite_zero_byte = gs_is_zero_byte(gs_uri)
-    gsutil_cmd = [GSUTIL_BIN, "-q", "cp"]
-    if overwrite_zero_byte:
-        print(f"    [REPAIR] overwriting zero-byte object: {gs_uri.split('/')[-1]}")
-    else:
-        gsutil_cmd.append("-n")
+def is_audio_uri(gs_uri: str) -> bool:
+    return Path(gs_uri).suffix.lower() in {".mp3", ".m4a", ".wav", ".aac", ".ogg", ".flac"}
 
+
+def gs_audio_valid(gs_uri: str, expected_seconds=None) -> bool:
+    return gs_media_valid(gs_uri, expected_seconds, validate_audio)
+
+
+def gs_video_valid(gs_uri: str, expected_seconds=None) -> bool:
+    return gs_media_valid(gs_uri, expected_seconds, validate_video)
+
+
+def gs_media_valid(gs_uri: str, expected_seconds, validator) -> bool:
+    """Verify stored bytes, not mere existence. Suspect originals stay untouched."""
+    from media_validation_receipts import ReceiptStore
+    try:
+        return ReceiptStore().validate(gs_uri, expected_seconds,
+            "video" if validator is validate_video else "audio", validator)
+    except Exception as exc:
+        # Denied/failed reads remain unverified, never represented as absent.
+        print(f"    [MEDIA_UNVERIFIED] {gs_uri}: {type(exc).__name__}; original preserved", file=sys.stderr)
+        return False
+
+
+def upload_validated_file(tmp_path, gs_uri, expected_seconds=None):
+    audio = is_audio_uri(gs_uri)
+    video = Path(gs_uri).suffix.lower() in {".mp4", ".webm", ".mov"}
+    media = audio or video
+    validator = validate_audio if audio else validate_video
+    stored_validator = gs_audio_valid if audio else gs_video_valid
+    if media:
+        validator(tmp_path, expected_seconds)
+        existing = subprocess.run([GSUTIL_BIN, "stat", gs_uri], capture_output=True, timeout=60)
+        if existing.returncode == 0:
+            # No silent no-clobber success over an invalid original. Explicit
+            # preservation-aware recovery owns replacement, not this harvester.
+            return stored_validator(gs_uri, expected_seconds)
+    command = [GSUTIL_BIN, "-q", "cp"]
+    if media or not gs_is_zero_byte(gs_uri):
+        command.append("-n")
+    proc = subprocess.run(command + [tmp_path, gs_uri], capture_output=True, timeout=180)
+    if proc.returncode:
+        print(f"    [gsutil error] {proc.stderr.decode().strip()}", file=sys.stderr)
+        return False
+    # A concurrent writer may have won the no-clobber race; check actual bytes.
+    return stored_validator(gs_uri, expected_seconds) if media else True
+
+
+def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None, expected_seconds=None) -> bool:
+    """
+    Download to a temporary file, validate media, and upload without clobbering.
+    Audio/video success requires validation of the actual stored object as well.
+    """
     suffix = Path(gs_uri).suffix or ".bin"
     tmp_path = None
     try:
@@ -145,15 +203,7 @@ def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None) -> bool:
             print(f"    [ERROR] Downloaded temp file is empty for {gs_uri}", file=sys.stderr)
             return False
 
-        proc = subprocess.run(
-            gsutil_cmd + [tmp_path, gs_uri],
-            capture_output=True,
-            timeout=180,
-        )
-        if proc.returncode == 0:
-            return True
-        print(f"    [gsutil error] {proc.stderr.decode().strip()}", file=sys.stderr)
-        return False
+        return upload_validated_file(tmp_path, gs_uri, expected_seconds)
     except subprocess.TimeoutExpired:
         print(f"    [TIMEOUT] stream_to_gcs timed out for {gs_uri}", file=sys.stderr)
         return False
@@ -168,48 +218,24 @@ def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None) -> bool:
                 pass
  
  
-def stream_bytes_to_gcs(data: bytes, gs_uri: str) -> bool:
-    """Write intercepted bytes directly to GCS using -n (no-clobber)."""
-    gsutil_cmd = [GSUTIL_BIN, "-q", "cp"]
-    if gs_is_zero_byte(gs_uri):
-        print(f"    [REPAIR] overwriting zero-byte object: {gs_uri.split('/')[-1]}")
-    else:
-        gsutil_cmd.append("-n")
-    if os.name == "nt":
-        suffix = Path(gs_uri).suffix or ".bin"
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                tmp_path = tmp.name
-                tmp.write(data)
-            proc = subprocess.run(
-                gsutil_cmd + [tmp_path, gs_uri],
-                capture_output=True,
-                timeout=120,
-            )
-            if proc.returncode == 0:
-                return True
-            print(f"    [gsutil error] {proc.stderr.decode().strip()}", file=sys.stderr)
-            return False
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-
-    gsutil_cmd += ["-", gs_uri]
+def stream_bytes_to_gcs(data: bytes, gs_uri: str, expected_seconds=None) -> bool:
+    """Validate intercepted audio/video bytes before upload on every platform."""
+    tmp_path = None
     try:
-        proc = subprocess.run(gsutil_cmd, input=data, capture_output=True, timeout=120)
-        if proc.returncode == 0:
-            return True
-        print(f"    [gsutil error] {proc.stderr.decode().strip()}", file=sys.stderr)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(gs_uri).suffix) as tmp:
+            tmp_path = tmp.name
+            tmp.write(data)
+        if not data:
+            return False
+        return upload_validated_file(tmp_path, gs_uri, expected_seconds)
+    except (InvalidAudio, OSError, subprocess.TimeoutExpired) as exc:
+        print(f"    [MEDIA_INVALID_OR_UPLOAD_FAILED] {gs_uri}: {exc}", file=sys.stderr)
         return False
-    except subprocess.TimeoutExpired:
-        print(f"    [TIMEOUT] stream_bytes_to_gcs for {gs_uri}", file=sys.stderr)
-        return False
- 
- 
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 # -- Playwright media interception --------------------------------------------
 async def intercept_clip_media(clip_id: str, handle: str) -> dict:
     """
@@ -224,9 +250,11 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
     result = {
         "audio_url": None,
         "audio_ext": None,
+        "audio_bytes": None,
         "video_url": None,
         "video_bytes": None,
         "thumb_url": None,
+        "thumb_bytes": None,
         "request_headers": {},
     }
     song_url = SUNO_SONG_URL.format(clip_id=clip_id)
@@ -285,6 +313,22 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
 
         async def handle_response(response):
             url = response.url
+            lower_url = url.lower()
+            is_suno_media = "cdn" in lower_url or "suno" in lower_url
+
+            if result["audio_bytes"] is None and is_suno_media and (
+                ".mp3" in lower_url or ".m4a" in lower_url or "audio" in lower_url
+            ):
+                try:
+                    body = await response.body()
+                    if body:
+                        result["audio_url"] = url
+                        result["audio_ext"] = "m4a" if ".m4a" in lower_url or ".mp3" not in lower_url else "mp3"
+                        result["audio_bytes"] = body
+                        intercepted_audio.set()
+                except Exception:
+                    pass
+
             if result["video_bytes"] is None and ".mp4" in url and ("cdn" in url or "suno" in url):
                 try:
                     body = await response.body()
@@ -292,6 +336,17 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
                         result["video_url"] = url
                         result["video_bytes"] = body
                         intercepted_video.set()
+                except Exception:
+                    pass
+
+            if result["thumb_bytes"] is None and is_suno_media and (
+                ".jpg" in lower_url or ".jpeg" in lower_url or ".png" in lower_url
+            ):
+                try:
+                    body = await response.body()
+                    if body:
+                        result["thumb_url"] = url
+                        result["thumb_bytes"] = body
                 except Exception:
                     pass
 
@@ -316,19 +371,13 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
  
             # Wait for audio stream to be intercepted
             try:
-                await asyncio.wait_for(
-                    asyncio.shield(asyncio.ensure_future(intercepted_audio.wait())),
-                    timeout=INTERCEPT_TIMEOUT_MS / 1000
-                )
+                await asyncio.wait_for(intercepted_audio.wait(), timeout=INTERCEPT_TIMEOUT_MS / 1000)
             except asyncio.TimeoutError:
                 print(f"    [WARN] Audio stream not intercepted within timeout for {clip_id}")
  
             # Brief wait for video stream too
             try:
-                await asyncio.wait_for(
-                    asyncio.shield(asyncio.ensure_future(intercepted_video.wait())),
-                    timeout=5.0
-                )
+                await asyncio.wait_for(intercepted_video.wait(), timeout=5.0)
             except asyncio.TimeoutError:
                 pass  # Video optional; continue without it
  
@@ -378,41 +427,62 @@ async def process_clip(row: dict) -> dict:
     result = {
         "clip_id": clip_id,
         "audio":   False,
+        "audio_ext": None,
         "video":   False,
         "thumb":   False,
         "errors":  [],
     }
  
+    # Metadata enrichment has no media permit: do not inspect, decode, discover,
+    # transfer or reclassify any native asset from this path.
+    if reason.startswith("metadata_repair:"):
+        result["metadata_only"] = True
+        if not update_song_metadata_only(row):
+            result["errors"].append(f"metadata update failed for {clip_id}")
+        return result
+    retained = reason.startswith("retained:")
+
     # Determine which assets are needed based on reason
     need_audio = "audio" in reason or reason == "new"
     need_video = "mp4" in reason or "video" in reason or reason == "new"
     need_thumb = "thumb" in reason or reason == "new"
- 
+
     # Check what's already in GCS (idempotency: skip if already present)
     audio_gs_mp3 = gcs_path(handle, clip_id, "mp3")
     audio_gs_m4a = gcs_path(handle, clip_id, "m4a")
     video_gs     = gcs_path(handle, clip_id, "mp4")
     thumb_gs     = gcs_path(handle, clip_id, "jpg")
  
-    audio_exists = gs_exists(audio_gs_mp3) or gs_exists(audio_gs_m4a)
-    video_exists = gs_exists(video_gs)
+    duration = expected_duration(row)
+    audio_ext = None
+    for ext, uri in (("mp3", audio_gs_mp3), ("m4a", audio_gs_m4a)):
+        if gs_exists(uri) and gs_audio_valid(uri, duration):
+            audio_ext = ext
+            break
+    audio_exists = audio_ext is not None
+    result["audio_ext"] = audio_ext
+    if not audio_exists and not retained:
+        need_audio = True
+    video_exists = gs_exists(video_gs) and gs_video_valid(video_gs, duration)
     thumb_exists = gs_exists(thumb_gs)
- 
+
+    # Preserve existing asset truth even for metadata-only repair rows.
+    result["audio"] = audio_exists
+    result["video"] = video_exists
+    result["thumb"] = thumb_exists
+
     if need_audio and audio_exists:
         print(f"    [SKIP] audio already in GCS")
-        result["audio"] = True
         need_audio = False
     if need_video and video_exists:
         print(f"    [SKIP] video already in GCS")
-        result["video"] = True
         need_video = False
     if need_thumb and thumb_exists:
         print(f"    [SKIP] thumb already in GCS")
-        result["thumb"] = True
         need_thumb = False
- 
+
     if not need_audio and not need_video and not need_thumb:
-        print(f"    [OK] All assets already in GCS -- fully synced")
+        print(f"    [OK] Assets already in GCS -- metadata refresh eligible")
         return result
  
     # Strategy 1: Try static URLs from manifest first (fast path, sometimes works)
@@ -425,15 +495,16 @@ async def process_clip(row: dict) -> dict:
         ext = "m4a" if static_audio.endswith(".m4a") else "mp3"
         target_gs = gcs_path(handle, clip_id, ext)
         print(f"    [TRY] Static audio ({ext}): {static_audio[:80]}...")
-        if stream_to_gcs(static_audio, target_gs):
+        if stream_to_gcs(static_audio, target_gs, expected_seconds=duration):
             print(f"    [OK] audio -> {target_gs}")
             result["audio"] = True
             need_audio = False
             static_ok = True
+            result["audio_ext"] = ext
  
     if need_video and static_video:
         print(f"    [TRY] Static video: {static_video[:80]}...")
-        if stream_to_gcs(static_video, video_gs):
+        if stream_to_gcs(static_video, video_gs, expected_seconds=duration):
             print(f"    [OK] video -> {video_gs}")
             result["video"] = True
             need_video = False
@@ -446,39 +517,56 @@ async def process_clip(row: dict) -> dict:
             need_thumb = False
  
     # Strategy 2: Playwright interception for anything still missing
-    if need_audio or need_video or need_thumb:
+    if not retained and (need_audio or need_video or need_thumb):
         print(f"    [PLAYWRIGHT] Intercepting streams for {clip_id}...")
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 intercepted = await intercept_clip_media(clip_id, handle)
  
+                if need_audio and intercepted.get("audio_bytes"):
+                    ext = intercepted.get("audio_ext", "m4a")
+                    target_gs = gcs_path(handle, clip_id, ext)
+                    print(f"    [TRY] Browser-captured audio ({ext})")
+                    if stream_bytes_to_gcs(intercepted["audio_bytes"], target_gs, expected_seconds=duration):
+                        print(f"    [OK] audio bytes -> {target_gs}")
+                        result["audio"] = True
+                        result["audio_ext"] = ext
+                        need_audio = False
+
                 if need_audio and intercepted.get("audio_url"):
                     ext = intercepted.get("audio_ext", "m4a")
                     target_gs = gcs_path(handle, clip_id, ext)
                     headers = intercepted.get("request_headers", {})
-                    # Filter to safe headers (avoid signing issues)
                     safe_headers = {
                         k: v for k, v in headers.items()
-                        if k.lower() in ("range", "referer", "accept")
+                        if k.lower() in ("referer", "accept", "user-agent", "origin")
                     }
-                    print(f"    [TRY] Playwright audio ({ext}): {intercepted['audio_url'][:80]}...")
-                    if stream_to_gcs(intercepted["audio_url"], target_gs, safe_headers):
+                    print(f"    [TRY] Playwright audio URL ({ext}): {intercepted['audio_url'][:80]}...")
+                    if stream_to_gcs(intercepted["audio_url"], target_gs, safe_headers, expected_seconds=duration):
                         print(f"    [OK] audio -> {target_gs}")
                         result["audio"] = True
+                        result["audio_ext"] = ext
                         need_audio = False
  
                 if need_video and intercepted.get("video_url"):
                     print(f"    [TRY] Playwright video: {intercepted['video_url'][:80]}...")
                     if intercepted.get("video_bytes"):
-                        if stream_bytes_to_gcs(intercepted["video_bytes"], video_gs):
+                        if stream_bytes_to_gcs(intercepted["video_bytes"], video_gs, expected_seconds=duration):
                             print(f"    [OK] video bytes -> {video_gs}")
                             result["video"] = True
                             need_video = False
-                    elif stream_to_gcs(intercepted["video_url"], video_gs):
+                    if need_video and stream_to_gcs(intercepted["video_url"], video_gs, expected_seconds=duration):
                         print(f"    [OK] video -> {video_gs}")
                         result["video"] = True
                         need_video = False
  
+                if need_thumb and intercepted.get("thumb_bytes"):
+                    print(f"    [TRY] Browser-captured thumb")
+                    if stream_bytes_to_gcs(intercepted["thumb_bytes"], thumb_gs):
+                        print(f"    [OK] thumb bytes -> {thumb_gs}")
+                        result["thumb"] = True
+                        need_thumb = False
+
                 if need_thumb and intercepted.get("thumb_url"):
                     print(f"    [TRY] Playwright thumb: {intercepted['thumb_url'][:80]}...")
                     if stream_to_gcs(intercepted["thumb_url"], thumb_gs):
@@ -502,11 +590,13 @@ async def process_clip(row: dict) -> dict:
     if need_video:
         msg = f"video not captured for {clip_id}"
         print(f"    [WARN] {msg}")  # video is optional
-        result["video"] = True     # don't block on video
+        result["video"] = False
+        result["errors"].append(msg)
     if need_thumb:
         msg = f"thumb not captured for {clip_id}"
         print(f"    [WARN] {msg}")
-        result["thumb"] = True     # don't block on thumb
+        result["thumb"] = False
+        result["errors"].append(msg)
  
     return result
  
@@ -579,12 +669,12 @@ async def _process_all(rows: list) -> list:
     for i, row in enumerate(rows, 1):
         print(f"\n[{i}/{len(rows)}] Processing {row['songKey']}")
         result = await process_clip(row)
-        if result.get("audio"):
+        if result.get("audio") and not row.get("reason", "").startswith("retained:"):
             upsert_song_after_download(
                 clip_id        = row.get("songKey", ""),
                 handle         = row.get("handle", ""),
                 title          = row.get("title", ""),
-                audio_ext      = result.get("audio_ext", "mp3"),
+                audio_ext      = result.get("audio_ext") or "mp3",
                 has_audio      = True,
                 has_video      = result.get("video", False),
                 has_thumb      = result.get("thumb", False),

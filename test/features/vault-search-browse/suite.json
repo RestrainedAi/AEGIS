@@ -1,0 +1,79 @@
+{
+  "featureId": "vault-search-browse",
+  "title": "Vault Search and Browse",
+  "module": "suno-viewer",
+  "deployPhase": "pre-deploy",
+  "scopeTicket": "AEGIS-SEARCH stack, EPIC-12",
+  "wireframeRef": "docs/design/aegis-design-board-page-map-v1.md",
+  "steps": [
+    {
+      "id": "VB-01",
+      "title": "Search utility unit tests",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --test test/search-utils.test.js",
+      "onFail": {
+        "suggestions": [
+          "Review suno-viewer/src/lib/search-utils.ts tokenization and account scoping",
+          "Check ACCOUNT_ALIASES in VaultGrid.tsx for handle/label mapping"
+        ]
+      }
+    },
+    {
+      "id": "VB-02",
+      "title": "Viewer unit test suite",
+      "type": "node-test",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "onFail": {
+        "suggestions": [
+          "Fix failing unit tests under suno-viewer/test/",
+          "Run npm test in suno-viewer for full output"
+        ],
+        "fixCommands": ["cd suno-viewer", "npm test"]
+      }
+    },
+    {
+      "id": "VB-03",
+      "title": "Production build (TypeScript + Vite)",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "npm run build",
+      "timeoutMs": 600000,
+      "onFail": {
+        "suggestions": [
+          "Resolve TypeScript errors in suno-viewer/src",
+          "Verify npm dependencies are installed: npm ci"
+        ]
+      }
+    },
+    {
+      "id": "VB-04",
+      "title": "Server syntax check",
+      "type": "command",
+      "deployPhase": "pre-deploy",
+      "cwd": "suno-viewer",
+      "command": "node --check server.js",
+      "onFail": {
+        "suggestions": [
+          "Fix syntax/runtime parse errors in suno-viewer/server.js",
+          "Re-run node --check server.js after edits"
+        ]
+      }
+    },
+    {
+      "id": "VB-05",
+      "title": "Manual vault browse smoke checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Open /vault on sundrop.cloud while authenticated",
+        "Confirm thumbnails render for visible rows",
+        "Confirm search + account filter + pagination counts stay consistent",
+        "Confirm lyrics state badges match Firestore/export data"
+      ]
+    }
+  ]
+}

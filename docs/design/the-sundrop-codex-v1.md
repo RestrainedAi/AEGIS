@@ -12,16 +12,22 @@ Working identity:
 - it also acts as the `Compass` that keeps work aligned and moving in the right direction
 
 Primary source materials folded into this guide:
-- [1_IMPORTANT_sundrop.music and sundrop.cloud Names and Pricing Tiers .docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/1_IMPORTANT_sundrop.music%20and%20sundrop.cloud%20Names%20and%20Pricing%20Tiers%20.docx)
-- [2_IMPORTANTsundrop music cloud Brand Identity.docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/2_IMPORTANTsundrop%20music%20cloud%20Brand%20Identity.docx)
-- [3_IMPORTANT_Executive Development Plan and Architectural Blueprint for Google Cloud SaaS Platform.docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/3_IMPORTANT_Executive%20Development%20Plan%20and%20Architectural%20Blueprint%20for%20Google%20Cloud%20SaaS%20Platform.docx)
-- [4_IMPORTANT_The Visual Design System (The _Aeonimus_ Theme).docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/4_IMPORTANT_The%20Visual%20Design%20System%20%28The%20_Aeonimus_%20Theme%29.docx)
+- [1_IMPORTANT_sundrop.music and sundrop.cloud Names and Pricing Tiers .docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/archive%20design%20docs/1_IMPORTANT_sundrop.music%20and%20sundrop.cloud%20Names%20and%20Pricing%20Tiers%20.docx)
+- [2_IMPORTANTsundrop music cloud Brand Identity.docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/archive%20design%20docs/2_IMPORTANTsundrop%20music%20cloud%20Brand%20Identity.docx)
+- [3_IMPORTANT_Executive Development Plan and Architectural Blueprint for Google Cloud SaaS Platform.docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/archive%20design%20docs/3_IMPORTANT_Executive%20Development%20Plan%20and%20Architectural%20Blueprint%20for%20Google%20Cloud%20SaaS%20Platform.docx)
+- [4_IMPORTANT_The Visual Design System (The _Aeonimus_ Theme).docx](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/archive%20design%20docs/4_IMPORTANT_The%20Visual%20Design%20System%20%28The%20_Aeonimus_%20Theme%29.docx)
 
 Related working docs:
 - [sundrop-design-guide-v1.md](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/sundrop-design-guide-v1.md)
 - [sundrop-design-conflicts-register-v1.md](C:/Users/blahn/OneDrive/Desktop/SUNO%20YouTube%20Pipeline/enviroment/AEGIS/docs/design/sundrop-design-conflicts-register-v1.md)
 
 ## 1. Big Picture
+
+### Development operating principles
+
+The engineering execution policy is [Development DNA](../codex/DEVELOPMENT_PRINCIPLES.md): **Sequence -> Conditional -> Loop**, one accountable owner per feature, and focused specialist teams for large features. Specialists receive bounded assignments and relevant context; the feature owner integrates and verifies their outputs against the customer outcome. Existing [workstream ownership](../codex/AEGIS_Workstream_Ownership_And_Change_Control.md) continues to govern shared write surfaces.
+
+Use the [feature brief](../codex/templates/FEATURE_BRIEF.md) and [delivery board](../board/README.md) to record acceptance evidence, dependencies, partial results, and next actions. Product/design direction in this Codex and implementation evidence are distinct: a documented principle, design, or plan does not prove it is deployed. Consult the [master authority map](../codex/AEGIS_MASTER_SOURCE_OF_TRUTH.md) for the topic-specific operational authority.
 
 `sundrop` is one integrated creator operations platform.
 

@@ -24,6 +24,10 @@ STYLE_KEYWORDS = [
     "synthpop", "synthwave", "techno", "trap",
 ]
 
+
+class SunoProfileFetchError(RuntimeError):
+    """The public profile endpoint did not provide a usable source snapshot."""
+
 def curl_json(url: str) -> Optional[dict]:
     # Use curl so we don't add python deps
     try:
@@ -55,7 +59,14 @@ def extract_clip_ids(profile_json: dict) -> List[str]:
                             ids.append(v.lower())
                             break
 
-    # Fallback: walk entire json and collect uuid-looking values for clip-ish keys
+    # An explicit clips array is authoritative even when empty. Other profile
+    # sections contain playlist/user UUIDs that must never become song IDs.
+    if isinstance(profile_json, dict) and "clips" in profile_json:
+        if not isinstance(profile_json["clips"], list):
+            raise SunoProfileFetchError("profile clips field was not an array")
+        return ids
+
+    # Legacy non-profile payloads may nest their clip records.
     if not ids:
         def walk(x: Any):
             if isinstance(x, dict):
@@ -87,6 +98,11 @@ def meta_pick(clip: dict, keys: List[str]) -> str:
         if isinstance(v, bool):
             return "true" if v else "false"
     return ""
+
+
+def clip_lyrics_text(clip: dict) -> str:
+    metadata = clip.get("metadata") if isinstance(clip.get("metadata"), dict) else {}
+    return pick(clip, ["lyrics"]) or meta_pick(clip, ["lyrics", "prompt"])
 
 
 def split_csvish(value: str) -> List[str]:
@@ -187,6 +203,7 @@ def main():
 
         tags = meta_pick(clip, ["tags"])
         prompt = meta_pick(clip, ["prompt"])
+        lyrics = clip_lyrics_text(clip) or prompt
         display_tags = pick(clip, ["display_tags"])
         styles, style_text = derive_styles(tags=tags, display_tags=display_tags, prompt=prompt)
 
@@ -199,7 +216,7 @@ def main():
             "createdAt": createdAt,
             "tags": tags,
             "prompt": prompt,
-            "lyrics": prompt,
+            "lyrics": lyrics,
             "modelName": pick(clip, ["model_name", "modelName"]),
             "isInstrumental": meta_pick(clip, ["make_instrumental"]),
             "description": pick(clip, ["description"]),
@@ -243,7 +260,7 @@ if __name__ == "__main__":
 
 
 def fetch_profile_clip_ids(handle: str) -> list:
-    """Fetch all clip IDs for a Suno handle. Called by delta_check scripts."""
+    """Fetch all clip IDs for a Suno handle without mistaking an API error for no songs."""
     base = f"https://studio-api.prod.suno.com/api/profiles/{handle}"
     page = 1
     all_ids = []
@@ -252,7 +269,15 @@ def fetch_profile_clip_ids(handle: str) -> list:
         url = f"{base}?page={page}&playlists_sort_by=created_at&clips_sort_by=created_at"
         data = curl_json(url)
         if not data:
-            break
+            raise SunoProfileFetchError(f"{handle}: profile request failed on page {page}")
+        if not isinstance(data, dict):
+            raise SunoProfileFetchError(f"{handle}: profile response was not an object on page {page}")
+        # A real empty profile still carries the clips field. Error payloads and
+        # bot/challenge responses must never be interpreted as an empty account,
+        # because that would mark every existing Firestore song as removed.
+        if "clips" not in data:
+            detail = str(data.get("detail") or data.get("message") or data.get("error") or "missing clips field")
+            raise SunoProfileFetchError(f"{handle}: unusable profile response on page {page}: {detail}")
         ids = extract_clip_ids(data)
         new_ids = [i for i in ids if i not in seen]
         if not new_ids:

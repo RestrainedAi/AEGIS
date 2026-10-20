@@ -13,6 +13,8 @@ __pycache__/
 *.backup.*
 *.csv
 *.json
+!fixtures/
+!fixtures/suno_export_contract_fixture.json
 daily_suno_job_manual_*
 gcs_upload.log
 harvest_run.log

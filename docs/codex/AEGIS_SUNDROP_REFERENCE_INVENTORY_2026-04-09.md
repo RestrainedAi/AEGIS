@@ -4,6 +4,8 @@
 
 This document is the first-pass inventory for `AEGIS-019`.
 
+Revalidated on 2026-05-05 against the current `suno-viewer` app and server code.
+
 It separates remaining `Aeonimus` references into four classes:
 
 - product-facing
@@ -17,12 +19,14 @@ The purpose is to prevent a dangerous global search-and-replace and instead migr
 
 These should be renamed now or are already in active rename scope.
 
-Status update as of 2026-04-09 evening:
+Status update as of 2026-05-05:
 
 - shared branding constants are now live
 - browser titles and major public-shell naming have been moved to `Sundrop`
 - the legacy `/vanessa` surface has been reduced to a compatibility redirect to `/vault`
-- remaining work is mostly scattered copy cleanup and domain-aware link replacement
+- the export-ready, beta-approval, and operator-review email links now resolve through canonical cloud-origin config instead of hardcoded legacy product URLs
+- no remaining hardcoded `music.aeonimus.info` product links were found in the active `suno-viewer` client code
+- remaining work is now concentrated in auth callbacks, authorized-domain rollout, and external routing rather than broad product-copy cleanup
 
 ### Live app and shell surfaces
 
@@ -41,6 +45,10 @@ Status update as of 2026-04-09 evening:
   - legacy `/vanessa` browser-title treatment has been removed
 - `suno-viewer/src/components/AdminControlCenter.tsx`
   - Control Center is now visually aligned to the dark Sundrop/Vault shell instead of the older cream admin style
+- `suno-viewer/branding.config.json`
+  - canonical `sundrop.cloud` and `sundrop.music` origins are defined in shared branding config
+- `suno-viewer/server.js`
+  - customer-facing Vault and Control Center email links now derive from configured cloud origin rather than legacy literals
 
 ### User/session/UI keys
 
@@ -55,10 +63,15 @@ These are internal browser keys, but they were safe to migrate and are now updat
 
 These should be abstracted behind shared constants/config before domain cutover.
 
-- current product-facing origins still need canonical config values for:
+- canonical product-facing origins now exist in shared config:
   - `sundrop.cloud`
   - `sundrop.music`
-- app/server naming should be driven from shared branding config, not scattered literals
+- app/server naming is largely driven from shared branding config, but the broader migration still needs:
+  - Firebase authorized-domain updates
+  - OAuth callback validation
+  - email magic-link target validation
+  - DNS and reverse-proxy cutover validation
+  - explicit rollout proof that `sundrop.music` and `sundrop.cloud` can run in parallel safely
 
 This is the scope of `AEGIS-020` and `AEGIS-022`.
 
@@ -66,13 +79,15 @@ This is the scope of `AEGIS-020` and `AEGIS-022`.
 
 These should **not** be renamed automatically.
 
-Examples currently in live data/config:
+Examples currently in live code/config:
 
 - GCS bucket names such as:
   - `aeonimus-workspaces`
   - `aeonimus-suno-media`
 - export and lyric artifact URLs under those buckets
 - historical Cloud Run / Artifact Registry naming that still carries `aeonimus`
+- approved-identity/bootstrap config values such as:
+  - `aeonimusai@gmail.com`
 
 These names may remain temporarily legacy without harming the live product brand.
 
@@ -102,6 +117,7 @@ If a historical document describes a real past state under `Aeonimus`, keep that
 - Control Center wording
 - browser-side keys that include `Aeonimus`
 - shared product/domain constants
+- hardcoded customer-facing links in notification emails and download-center copy
 
 ### Leave for later
 
@@ -109,6 +125,7 @@ If a historical document describes a real past state under `Aeonimus`, keep that
 - media object paths
 - Artifact Registry paths
 - Cloud Run service names
+- bootstrap/admin identity values where renaming is not product-facing
 - historical docs that record real prior state
 
 ## Ticket Mapping

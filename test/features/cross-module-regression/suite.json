@@ -1,0 +1,43 @@
+{
+  "featureId": "cross-module-regression",
+  "title": "Cross-Module Regression Orchestrator",
+  "module": "aegis",
+  "deployPhase": "post-deploy",
+  "scopeTicket": "AEGIS_TEST_MATRIX cross-module section",
+  "wireframeRef": "docs/codex/AEGIS_TEST_MATRIX_2026-05-04.md#cross-module-regression-after-domain-change",
+  "steps": [
+    {
+      "id": "XR-01",
+      "title": "Re-run harvest freshness pre-deploy checks",
+      "type": "suite",
+      "featureId": "harvest-freshness",
+      "phase": "pre-deploy"
+    },
+    {
+      "id": "XR-02",
+      "title": "Re-run vault/search/build checks",
+      "type": "suite",
+      "featureId": "vault-search-browse",
+      "phase": "pre-deploy"
+    },
+    {
+      "id": "XR-03",
+      "title": "Re-run export/download contract checks",
+      "type": "suite",
+      "featureId": "downloads-export",
+      "phase": "pre-deploy"
+    },
+    {
+      "id": "XR-04",
+      "title": "Manual cross-module smoke checklist",
+      "type": "manual",
+      "deployPhase": "post-deploy",
+      "checklist": [
+        "Harvest updates published catalog and Vault freshness",
+        "Downloads queue/history still works on new domains",
+        "Export ZIP/CSV/JSON downloads succeed from sundrop.cloud",
+        "YouTube queue/publish UI opens and submits correctly"
+      ]
+    }
+  ]
+}

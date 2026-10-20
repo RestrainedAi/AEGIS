@@ -96,6 +96,16 @@ Current important fields:
 - `harvestEnabled`
 - `provisioningState`
 
+Reliability fields required for the current source contract:
+
+- `ingestionMode` (`public_profile`, `owned_library`, or `official_export`)
+- `authorityStatus` (`verified`, `partial_source`, or `blocked_source`)
+- `lastAuthoritativeSnapshotAt`
+- `latestAuthoritativeSongAt`
+- `lastSourceError`
+- `archivedAt`
+- `archiveReason`
+
 New ownership bridge fields now in use:
 
 - `ownerUid`
@@ -110,6 +120,8 @@ Meaning:
 - the source record is the handle ownership bridge
 - it ties a SUNO account to a specific workspace and therefore to a specific plan
 - harvest should follow active `sources/*` records rather than a hardcoded handle list
+- archived customers retain their existing catalog and media, but are excluded
+  from new collection until a deliberate reactivation changes their source state
 
 ## Current platform rule
 

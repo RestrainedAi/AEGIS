@@ -42,12 +42,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any
+from pathlib import Path
 
 from gcp_access_token import get_access_token
 
@@ -64,6 +67,10 @@ STYLE_KEYWORDS = [
     "phonk", "pop", "punk", "r&b", "rap", "rock", "shoegaze", "soul",
     "synthpop", "synthwave", "techno", "trap",
 ]
+
+
+class StudioApiAccessError(RuntimeError):
+    """A particular Studio request was denied; other songs may still work."""
 
 
 def now_iso() -> str:
@@ -136,6 +143,15 @@ def preview_text(value: Any, limit: int = 100) -> str:
     if len(text) > limit:
         text = text[:limit] + "..."
     return text.encode("ascii", "replace").decode("ascii")
+
+
+def clip_lyrics_text(clip: dict[str, Any]) -> str:
+    metadata = clip.get("metadata") if isinstance(clip.get("metadata"), dict) else {}
+    return normalize_multiline_text(
+        clip.get("lyrics")
+        or metadata.get("lyrics")
+        or metadata.get("prompt")
+    )
 
 
 def parse_bool(value: Any) -> bool | None:
@@ -224,6 +240,27 @@ def fetch_clip(song_key: str) -> dict[str, Any]:
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return {}
+        if exc.code in {401, 403}:
+            # Use the same public HTTP client as profile/media ingestion. A
+            # urllib denial does not establish that a song requires a login.
+            curl = shutil.which("curl.exe") or shutil.which("curl")
+            if curl:
+                result = subprocess.run(
+                    [curl, "--silent", "--show-error", "--max-time", "30",
+                     "--write-out", "\n%{http_code}", CLIP_URL.format(clip_id=song_key)],
+                    capture_output=True, text=True, encoding="utf-8", timeout=40,
+                )
+                body, _, status = result.stdout.rpartition("\n")
+                if result.returncode == 0 and status == "200":
+                    payload = json.loads(body)
+                    if not isinstance(payload, dict) or payload.get("id") != song_key:
+                        raise ValueError("Studio clip response identity mismatch")
+                    return payload
+                if result.returncode == 0 and status == "404":
+                    return {}
+            raise StudioApiAccessError(
+                f"Studio clip request denied (HTTP {exc.code}); cause unverified; continuing other songs."
+            ) from exc
         raise
 
 
@@ -233,6 +270,12 @@ def build_patch(doc: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any]:
     song_key = doc.get("name", "").split("/")[-1]
     clip_ref = CLIP_URL.format(clip_id=song_key)
     patch: dict[str, Any] = {}
+
+    for name, value in (("duration", metadata.get("duration")),
+                        ("views", clip.get("play_count")),
+                        ("likes", clip.get("upvote_count"))):
+        if fval(fields.get(name)) in (None, "") and isinstance(value, (int, float)) and not isinstance(value, bool):
+            patch[name] = {"doubleValue": value}
 
     existing_title = sanitize_text(fval(fields.get("title")))
     clip_title = sanitize_text(clip.get("title") or clip.get("name"))
@@ -262,21 +305,22 @@ def build_patch(doc: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any]:
 
     existing_lyrics_raw = normalize_multiline_text(fval(fields.get("lyrics")))
     existing_lyrics = sanitize_text(fval(fields.get("lyrics")))
+    clip_lyrics_raw = clip_lyrics_text(clip)
     should_upgrade_lyrics_format = (
-        bool(clip_prompt_raw)
+        bool(clip_lyrics_raw)
         and bool(existing_lyrics_raw)
-        and "\n" in clip_prompt_raw
+        and "\n" in clip_lyrics_raw
         and "\n" not in existing_lyrics_raw
     )
-    if (not existing_lyrics and clip_prompt_raw) or should_upgrade_lyrics_format:
-        patch["lyrics"] = fs_string(clip_prompt_raw)
+    if (not existing_lyrics and clip_lyrics_raw) or should_upgrade_lyrics_format:
+        patch["lyrics"] = fs_string(clip_lyrics_raw)
 
     existing_lyrics_source = sanitize_text(fval(fields.get("lyricsSource")))
-    if not existing_lyrics_source and clip_prompt_raw:
+    if not existing_lyrics_source and clip_lyrics_raw:
         patch["lyricsSource"] = fs_string("SUNO_STUDIO_API")
 
     existing_lyrics_retrieved_at = sanitize_text(fval(fields.get("lyricsRetrievedAt")))
-    if not existing_lyrics_retrieved_at and clip_prompt_raw:
+    if not existing_lyrics_retrieved_at and clip_lyrics_raw:
         patch["lyricsRetrievedAt"] = fs_string(now_iso())
 
     existing_caption = sanitize_text(fval(fields.get("caption")))
@@ -340,7 +384,7 @@ def build_patch(doc: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any]:
     existing_transcript_status = sanitize_text(fval(fields.get("transcriptStatus")))
     existing_transcript = sanitize_text(fval(fields.get("transcript")))
 
-    should_mark_lyrics_ok = bool(existing_lyrics or clip_prompt_raw)
+    should_mark_lyrics_ok = bool(existing_lyrics or clip_lyrics_raw)
     if should_mark_lyrics_ok and existing_lyrics_status != "OK":
         patch["lyricsStatus"] = fs_string("OK")
     elif not existing_lyrics_status:
@@ -379,6 +423,17 @@ def should_consider(doc: dict[str, Any]) -> bool:
     return bool(handle)
 
 
+def matches_filters(doc: dict[str, Any], source_id_filter: str = "", handle_filter: str = "") -> bool:
+    fields = doc.get("fields", {}) or {}
+    source_id = sanitize_text(fval(fields.get("sourceId")))
+    handle = sanitize_text(fval(fields.get("handle")))
+    if source_id_filter and source_id != source_id_filter:
+        return False
+    if handle_filter and handle != handle_filter:
+        return False
+    return True
+
+
 def patch_doc(token: str, doc_name: str, patch_fields: dict[str, Any]) -> None:
     mask = "&".join(
         f"updateMask.fieldPaths={urllib.parse.quote(field)}"
@@ -405,6 +460,8 @@ def main() -> int:
     parser.add_argument("--sleep", type=float, default=0.15, help="Sleep seconds between Studio API calls.")
     parser.add_argument("--dry-run", action="store_true", help="Preview patches without writing.")
     parser.add_argument("--apply", action="store_true", help="Write patches to Firestore.")
+    parser.add_argument("--source-id", default="", help="Only process docs with this Firestore sourceId.")
+    parser.add_argument("--handle", default="", help="Only process docs with this Firestore handle.")
     args = parser.parse_args()
 
     apply_changes = args.apply and not args.dry_run
@@ -419,17 +476,23 @@ def main() -> int:
     patched = 0
     skipped = 0
     failed = 0
+    attempted = 0
+    unresolved = []
 
     for doc in docs:
         if not should_consider(doc):
+            continue
+        if not matches_filters(doc, source_id_filter=args.source_id, handle_filter=args.handle):
             continue
 
         doc_name = doc.get("name", "")
         song_key = doc_name.split("/")[-1]
         try:
+            attempted += 1
             clip = fetch_clip(song_key)
             if not clip:
                 skipped += 1
+                unresolved.append({"songKey": song_key, "reason": "source_not_found"})
                 continue
             patch_fields = build_patch(doc, clip)
             if not patch_fields:
@@ -461,7 +524,9 @@ def main() -> int:
                 time.sleep(args.sleep)
         except Exception as exc:
             failed += 1
+            unresolved.append({"songKey": song_key, "reason": type(exc).__name__, "detail": str(exc)})
             print(f"  [WARN] {song_key}: {type(exc).__name__}: {exc}")
+            # A single denied clip must never starve the rest of the catalog.
             if args.sleep:
                 time.sleep(args.sleep)
 
@@ -470,7 +535,24 @@ def main() -> int:
     print(f"  touched    : {patched}")
     print(f"  skipped    : {skipped}")
     print(f"  failed     : {failed}")
-    return 0
+    report = {"generatedAt": now_iso(), "mode": "apply" if apply_changes else "dry_run",
+              "attempted": attempted, "patched": patched, "skipped": skipped,
+              "failed": failed, "unresolved": unresolved,
+              "status": "partial" if unresolved else "complete"}
+    report_bytes = json.dumps(report, indent=2).encode("utf-8")
+    Path("metadata_enrichment_report.json").write_bytes(report_bytes)
+    if apply_changes:
+        object_name = "exports/suno/recovery/metadata/" + now_iso().replace(":", "-") + ".json"
+        url = ("https://storage.googleapis.com/upload/storage/v1/b/aeonimus-workspaces/o"
+               "?uploadType=media&ifGenerationMatch=0&name=" + urllib.parse.quote(object_name, safe=""))
+        request = urllib.request.Request(url, data=report_bytes, method="POST",
+                                         headers={**fire_headers(token), "Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            response.read()
+        print(f"Metadata recovery report: gs://aeonimus-workspaces/{object_name}")
+    # A completed sweep with individual unavailable songs is partial, not a
+    # reason to immediately replay every successful source request.
+    return 3 if unresolved else 0
 
 
 if __name__ == "__main__":

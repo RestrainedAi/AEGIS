@@ -1,14 +1,18 @@
+# Image tag defaults to "latest" for redeploy_harvest.sh; pass
+# --substitutions=_IMAGE_TAG=<git-sha> to build a traceable image.
+substitutions:
+  _IMAGE_TAG: 'latest'
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
-      - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-repo/harvest-job:latest'
+      - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-repo/harvest-job:${_IMAGE_TAG}'
       - '-f'
       - 'Dockerfile.harvest'
       - '.'
 images:
-  - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-repo/harvest-job:latest'
+  - 'us-central1-docker.pkg.dev/stable-framing-482501-t9/aeonimus-repo/harvest-job:${_IMAGE_TAG}'
 options:
   machineType: 'E2_HIGHCPU_8'
   diskSizeGb: 50

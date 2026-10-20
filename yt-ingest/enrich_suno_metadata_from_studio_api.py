@@ -41,6 +41,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import random
 import re
 import shutil
 import subprocess
@@ -52,7 +54,7 @@ from datetime import datetime, timezone
 from typing import Any
 from pathlib import Path
 
-from gcp_access_token import get_access_token
+from gcp_access_token import get_access_token, invalidate_access_token
 
 PROJECT = "stable-framing-482501-t9"
 DATABASE = "(default)"
@@ -67,6 +69,45 @@ STYLE_KEYWORDS = [
     "phonk", "pop", "punk", "r&b", "rap", "rock", "shoegaze", "soul",
     "synthpop", "synthwave", "techno", "trap",
 ]
+
+
+# Retry/backoff for Suno Studio requests that are denied or rate limited.
+RETRYABLE_SOURCE_STATUSES = {401, 403, 429}
+SOURCE_MAX_ATTEMPTS = int(os.environ.get("SUNO_METADATA_MAX_ATTEMPTS", "3"))
+BACKOFF_BASE_SECONDS = float(os.environ.get("SUNO_METADATA_BACKOFF_BASE", "2"))
+BACKOFF_MAX_SECONDS = 60.0
+# After this many consecutive denied songs, slow the whole sweep down.
+DENIAL_STREAK_COOLDOWN = 10
+
+
+def backoff_delay(attempt: int, retry_after: str | None = None) -> float:
+    """Exponential backoff with full jitter; honours Retry-After seconds."""
+    if retry_after:
+        try:
+            return min(BACKOFF_MAX_SECONDS, max(0.0, float(retry_after)))
+        except ValueError:
+            pass
+    cap = min(BACKOFF_MAX_SECONDS, BACKOFF_BASE_SECONDS * (2 ** max(0, attempt - 1)))
+    return random.uniform(0, cap) if cap > 0 else 0.0
+
+
+def google_urlopen(build_request, timeout: int = 30) -> bytes:
+    """Call a Google API with a fresh token; on HTTP 401 refresh once and retry.
+
+    build_request(token) must return a urllib Request. Long runs used to reuse
+    a token older than its ~60 min lifetime, which crashed the harvest.
+    """
+    for attempt in (1, 2):
+        req = build_request(get_access_token())
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401 and attempt == 1:
+                invalidate_access_token()
+                continue
+            raise
+    raise RuntimeError("unreachable")
 
 
 class StudioApiAccessError(RuntimeError):
@@ -230,7 +271,7 @@ def fetch_all_docs(token: str) -> list[dict[str, Any]]:
             return docs
 
 
-def fetch_clip(song_key: str) -> dict[str, Any]:
+def _fetch_clip_once(song_key: str) -> dict[str, Any]:
     try:
         return http_json(
             CLIP_URL.format(clip_id=song_key),
@@ -258,10 +299,26 @@ def fetch_clip(song_key: str) -> dict[str, Any]:
                     return payload
                 if result.returncode == 0 and status == "404":
                     return {}
-            raise StudioApiAccessError(
-                f"Studio clip request denied (HTTP {exc.code}); cause unverified; continuing other songs."
-            ) from exc
         raise
+
+
+def fetch_clip(song_key: str) -> dict[str, Any]:
+    """Fetch one clip; back off and retry on 401/403/429, then report denial."""
+    last: urllib.error.HTTPError | None = None
+    for attempt in range(1, max(1, SOURCE_MAX_ATTEMPTS) + 1):
+        try:
+            return _fetch_clip_once(song_key)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in RETRYABLE_SOURCE_STATUSES:
+                raise
+            last = exc
+            if attempt < SOURCE_MAX_ATTEMPTS:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                time.sleep(backoff_delay(attempt, retry_after))
+    raise StudioApiAccessError(
+        f"Studio clip request denied (HTTP {last.code if last else '?'}) after "
+        f"{SOURCE_MAX_ATTEMPTS} attempts; marked for retry; continuing other songs."
+    ) from last
 
 
 def build_patch(doc: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any]:
@@ -441,17 +498,35 @@ def patch_doc(token: str, doc_name: str, patch_fields: dict[str, Any]) -> None:
     )
     url = f"https://firestore.googleapis.com/v1/{doc_name}?{mask}"
     body = json.dumps({"fields": patch_fields}).encode()
-    req = urllib.request.Request(
+    # `token` is kept for compatibility; google_urlopen always uses a fresh one.
+    google_urlopen(lambda fresh: urllib.request.Request(
         url,
         data=body,
         method="PATCH",
         headers={
-            **fire_headers(token),
+            **fire_headers(fresh),
             "Content-Type": "application/json",
         },
-    )
-    with urllib.request.urlopen(req, timeout=30) as response:
-        response.read()
+    ), timeout=30)
+
+
+def mark_for_retry(token: str, doc_name: str, reason: str, detail: str = "") -> bool:
+    """Best-effort flag so the next sweep / repair loop retries this song."""
+    try:
+        patch_doc(token, doc_name, {
+            "metadataRetryPending": fs_bool(True),
+            "metadataRetryReason": fs_string(reason[:200]),
+            "metadataRetryDetail": fs_string(detail[:500]),
+            "metadataRetryAt": {"timestampValue": now_iso()},
+        })
+        return True
+    except Exception as exc:  # never let the retry marker end the run
+        print(f"  [WARN] could not mark {doc_name.split('/')[-1]} for retry: {type(exc).__name__}")
+        return False
+
+
+def clear_retry_fields() -> dict[str, Any]:
+    return {"metadataRetryPending": fs_bool(False)}
 
 
 def main() -> int:
@@ -478,6 +553,8 @@ def main() -> int:
     failed = 0
     attempted = 0
     unresolved = []
+    marked_for_retry = 0
+    denial_streak = 0
 
     for doc in docs:
         if not should_consider(doc):
@@ -515,8 +592,11 @@ def main() -> int:
                 print(f"     description: {preview_text(patch_fields['description']['stringValue'], 140)}")
 
             if apply_changes:
+                if fval((doc.get("fields") or {}).get("metadataRetryPending")):
+                    patch_fields = {**patch_fields, **clear_retry_fields()}
                 patch_doc(token, doc_name, patch_fields)
             patched += 1
+            denial_streak = 0
 
             if args.limit and patched >= args.limit:
                 break
@@ -527,6 +607,14 @@ def main() -> int:
             unresolved.append({"songKey": song_key, "reason": type(exc).__name__, "detail": str(exc)})
             print(f"  [WARN] {song_key}: {type(exc).__name__}: {exc}")
             # A single denied clip must never starve the rest of the catalog.
+            if apply_changes and mark_for_retry(token, doc_name, type(exc).__name__, str(exc)):
+                marked_for_retry += 1
+            if isinstance(exc, StudioApiAccessError):
+                denial_streak += 1
+                if denial_streak % DENIAL_STREAK_COOLDOWN == 0:
+                    pause = backoff_delay(min(6, denial_streak // DENIAL_STREAK_COOLDOWN + 2))
+                    print(f"  [BACKOFF] {denial_streak} denied songs in a row; pausing {pause:.0f}s")
+                    time.sleep(pause)
             if args.sleep:
                 time.sleep(args.sleep)
 
@@ -535,9 +623,10 @@ def main() -> int:
     print(f"  touched    : {patched}")
     print(f"  skipped    : {skipped}")
     print(f"  failed     : {failed}")
+    print(f"  retry-marked: {marked_for_retry}")
     report = {"generatedAt": now_iso(), "mode": "apply" if apply_changes else "dry_run",
               "attempted": attempted, "patched": patched, "skipped": skipped,
-              "failed": failed, "unresolved": unresolved,
+              "failed": failed, "markedForRetry": marked_for_retry, "unresolved": unresolved,
               "status": "partial" if unresolved else "complete"}
     report_bytes = json.dumps(report, indent=2).encode("utf-8")
     Path("metadata_enrichment_report.json").write_bytes(report_bytes)
@@ -545,11 +634,15 @@ def main() -> int:
         object_name = "exports/suno/recovery/metadata/" + now_iso().replace(":", "-") + ".json"
         url = ("https://storage.googleapis.com/upload/storage/v1/b/aeonimus-workspaces/o"
                "?uploadType=media&ifGenerationMatch=0&name=" + urllib.parse.quote(object_name, safe=""))
-        request = urllib.request.Request(url, data=report_bytes, method="POST",
-                                         headers={**fire_headers(token), "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=60) as response:
-            response.read()
-        print(f"Metadata recovery report: gs://aeonimus-workspaces/{object_name}")
+        try:
+            google_urlopen(lambda fresh: urllib.request.Request(
+                url, data=report_bytes, method="POST",
+                headers={**fire_headers(fresh), "Content-Type": "application/json"}), timeout=60)
+            print(f"Metadata recovery report: gs://aeonimus-workspaces/{object_name}")
+        except Exception as exc:
+            # The report is a by-product; losing it must not fail the harvest.
+            print(f"  [WARN] metadata report upload failed ({type(exc).__name__}); local copy kept")
+            unresolved.append({"songKey": "", "reason": "report_upload_failed"})
     # A completed sweep with individual unavailable songs is partial, not a
     # reason to immediately replay every successful source request.
     return 3 if unresolved else 0

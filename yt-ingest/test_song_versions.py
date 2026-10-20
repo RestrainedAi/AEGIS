@@ -66,7 +66,8 @@ class VersionTests(unittest.TestCase):
         doc = {"name": "x/sunoSongs/id1", "fields": {
             "title": {"stringValue": "T"}, "status": {"stringValue": "removed_from_suno"},
             "image_url": {"stringValue": "gs://aeonimus-suno-media/a.jpg"},
-            "gcs": {"mapValue": {"fields": {"audio": {"stringValue": "gs://m/a.mp3"}}}}}}
+            "gcs": {"mapValue": {"fields": {"audio": {"booleanValue": True}, "video": {"booleanValue": False}}}},
+            "media": {"mapValue": {"fields": {"audioUrl": {"stringValue": "gs://m/a.mp3"}, "videoUrl": {"nullValue": None}}}}}}
         head, v1 = mig.doc_to_v1(doc, "run", "t")
         self.assertEqual(head["publishState"], "unpublished")
         self.assertEqual(v1["assets"]["audio"]["status"], "ok")

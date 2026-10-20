@@ -58,7 +58,8 @@ def to_fs(v: Any) -> dict[str, Any]:
 
 def doc_to_v1(doc: dict[str, Any], run_id: str, at: str) -> tuple[dict, dict]:
     f = {k: fval(v) for k, v in (doc.get("fields") or {}).items()}
-    gcs = f.get("gcs") or {}
+    gcs = f.get("gcs") or {}       # booleans: {audio: true, ...}
+    media = f.get("media") or {}   # gs:// paths: audioUrl/videoUrl/thumbUrl/largeArtUrl
     meta = {k: f.get(k) for k in sv.TRACKED_FIELDS}
     source = {
         "audio": {"url": f.get("audio_url") or f.get("audioUrl") or ""},
@@ -68,9 +69,13 @@ def doc_to_v1(doc: dict[str, Any], run_id: str, at: str) -> tuple[dict, dict]:
     }
     source = {k: v for k, v in source.items() if v["url"] and not v["url"].startswith("gs://")}
     assets = {}
-    for asset, key in (("audio", "audio"), ("video", "video"), ("cover", "thumb")):
-        path = gcs.get(key)
-        assets[asset] = {"gcs": path, "status": "ok"} if path else {"status": "missing"}
+    for asset, flag, key in (("audio", "audio", "audioUrl"), ("video", "video", "videoUrl"),
+                             ("cover", "thumb", "thumbUrl"), ("coverLarge", "largeArt", "largeArtUrl")):
+        path = media.get(key)
+        ok = bool(path) and gcs.get(flag) is not False
+        assets[asset] = {"gcs": path, "status": "ok"} if ok else {"status": "missing"}
+        if ok and isinstance(media.get(asset + "Recovery"), dict):
+            assets[asset]["derived"] = True
     version = {"n": 1, "capturedAt": at, "runId": run_id, "changedFields": ["initial"],
                "metadata": sv.canonical_metadata(meta), "source": source, "assets": assets,
                "migratedFrom": "flat-doc"}
@@ -87,6 +92,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--sample", type=int, default=0, help="write N sample records to the report")
     args = ap.parse_args()
     at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     run_id = "migrate-v1-" + at[:19].replace(":", "")
@@ -102,13 +108,18 @@ def main() -> int:
             break
     if args.limit:
         docs = docs[: args.limit]
-    stats = {"songs": len(docs), "alreadyVersioned": 0, "unpublished": 0, "missingAssets": {}}
+    stats = {"songs": len(docs), "alreadyVersioned": 0, "unpublished": 0, "missingAssets": {},
+             "wouldCreateVersionDocs": 0, "wouldAddHeadFields": [], "samples": []}
     for doc in docs:
         if "currentVersion" in (doc.get("fields") or {}):
             stats["alreadyVersioned"] += 1
             continue
         head, v1 = doc_to_v1(doc, run_id, at)
         stats["unpublished"] += head["publishState"] == "unpublished"
+        stats["wouldCreateVersionDocs"] += 1
+        stats["wouldAddHeadFields"] = sorted(set(stats["wouldAddHeadFields"]) | set(head))
+        if len(stats["samples"]) < args.sample:
+            stats["samples"].append({"doc": doc["name"].split("/documents/")[-1], "head": head, "version1": v1})
         for a, s in v1["assets"].items():
             if s["status"] == "missing":
                 stats["missingAssets"][a] = stats["missingAssets"].get(a, 0) + 1

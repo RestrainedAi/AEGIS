@@ -38,6 +38,9 @@ void setPersistence(firebaseAuth, browserLocalPersistence)
 
 const emailLinkUrl = buildActiveCloudUrl('/vault')
 export const MAGIC_LINK_ENABLED = false
+/** Master Admin view-as session (sessionStorage only; cleared on Exit or expiry). */
+export const VIEW_AS_TOKEN_KEY = 'aegis.viewAs.token'
+export const VIEW_AS_SESSION_KEY = 'aegis.viewAs.session'
 export const DEFAULT_VAULT_SESSION_HOURS = 10 * 24
 export const MIN_VAULT_SESSION_HOURS = 72
 export const MAX_VAULT_SESSION_HOURS = 31 * 24
@@ -350,6 +353,10 @@ export async function authFetch(
   const activeToken = explicitToken ?? (await firebaseAuth.currentUser?.getIdToken()) ?? ''
   if (activeToken) {
     headers.set('Authorization', `Bearer ${activeToken}`)
+  }
+  const viewAsToken = typeof window !== 'undefined' ? window.sessionStorage.getItem(VIEW_AS_TOKEN_KEY) : null
+  if (viewAsToken && !headers.has('x-view-as-session')) {
+    headers.set('x-view-as-session', viewAsToken)
   }
   return fetch(input, {
     ...init,

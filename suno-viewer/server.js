@@ -3036,8 +3036,8 @@ function pickActiveWorkspace(workspaces, preferredWorkspaceId, userDoc) {
   return workspaces[0];
 }
 
-async function resolveRequestContext(req, accessToken) {
-  const token = parseBearerToken(req);
+async function resolveRequestContextInner(req, accessToken, viewAsSubject = null) {
+  const token = viewAsSubject ? "view-as" : parseBearerToken(req);
   const preferredWorkspaceId =
     String(req.query.workspaceId || req.headers["x-workspace-id"] || "").trim();
 
@@ -3060,7 +3060,7 @@ async function resolveRequestContext(req, accessToken) {
 
   let decodedToken = null;
   try {
-    decodedToken = await firebaseAuth.verifyIdToken(token);
+    decodedToken = viewAsSubject || (await firebaseAuth.verifyIdToken(token));
   } catch (_error) {
     return {
       authEnabled: true,
@@ -3078,8 +3078,11 @@ async function resolveRequestContext(req, accessToken) {
       authInitError: firebaseInitError,
     };
   }
-  const userDoc = await ensureUserProfile(decodedToken, accessToken);
-  await ensureBootstrapWorkspaceForUser(decodedToken, accessToken);
+  // View-as sessions are read-only: never create/update the subject's profile or workspace.
+  const userDoc = viewAsSubject
+    ? await fsGetDocByPath(`users/${decodedToken.uid}`, accessToken).catch(() => null)
+    : await ensureUserProfile(decodedToken, accessToken);
+  if (!viewAsSubject) await ensureBootstrapWorkspaceForUser(decodedToken, accessToken);
 
   let refreshedUserDoc = null;
   try {
@@ -3088,12 +3091,12 @@ async function resolveRequestContext(req, accessToken) {
     console.warn("[auth-session] failed to refresh user doc:", error?.message || error);
   }
 
-  const bootstrapApproved =
+  const bootstrapApproved = !viewAsSubject && (
     isBootstrapApprovedEmail(decodedToken.email) ||
-    isBootstrapApprovedEmail(fsString(refreshedUserDoc || userDoc, "email"));
+    isBootstrapApprovedEmail(fsString(refreshedUserDoc || userDoc, "email")));
 
   let adminDoc = null;
-  try {
+  if (!viewAsSubject) try {
     adminDoc = await findAdminDocForIdentity(
       {
         uid: decodedToken.uid,
@@ -3168,6 +3171,140 @@ async function resolveRequestContext(req, accessToken) {
     betaAccess,
     authInitError: firebaseInitError,
   };
+}
+
+// ---- Master Admin "view as user" (PLAN_4_5 step 5). Off unless MASTER_ADMIN_ENABLED=true. ----
+const adminAccess = require("./admin-access");
+const MASTER_ADMIN_ENABLED = String(process.env.MASTER_ADMIN_ENABLED || "").trim().toLowerCase() === "true";
+const VIEW_AS_SECRET = String(process.env.VIEW_AS_SECRET || "");
+const ADMIN_AUDIT_COLLECTION = "adminAuditLog";
+
+async function writeAdminAudit(entry, accessToken) {
+  console.log(JSON.stringify({ severity: "NOTICE", logName: "admin-audit", ...entry }));
+  try {
+    await fsCreateDoc(ADMIN_AUDIT_COLLECTION, objectToFsFields(entry), accessToken || (await getAccessToken()));
+  } catch (error) {
+    console.warn("[admin-audit] firestore write failed:", error?.message || error);
+  }
+}
+
+async function verifyMasterAdminRequest(req) {
+  const token = parseBearerToken(req);
+  if (!token || !firebaseAuth) return null;
+  try {
+    const decoded = await firebaseAuth.verifyIdToken(token);
+    return adminAccess.hasRole(decoded, "master_admin") ? decoded : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Returns {session} when a valid view-as header is present, {error,status} when present but invalid, null when absent.
+async function readViewAsSession(req) {
+  if (!MASTER_ADMIN_ENABLED) return null;
+  const raw = req.headers["x-view-as-session"];
+  if (!raw) return null;
+  if (VIEW_AS_SECRET.length < 32) return { status: 503, error: "view-as not configured" };
+  const session = adminAccess.verify(String(raw), VIEW_AS_SECRET);
+  if (!session) return { status: 401, error: "view-as session invalid or expired" };
+  const actor = await verifyMasterAdminRequest(req);
+  if (!actor || actor.uid !== session.actor) return { status: 403, error: "view-as session belongs to another admin" };
+  return { session, actor };
+}
+
+async function resolveRequestContext(req, accessToken) {
+  const viewAs = await readViewAsSession(req);
+  if (!viewAs) return resolveRequestContextInner(req, accessToken);
+  if (!viewAs.session) {
+    const err = new Error(viewAs.error);
+    err.status = viewAs.status;
+    throw err;
+  }
+  const { session } = viewAs;
+  let subject = { uid: session.subject };
+  try {
+    const rec = await firebaseAuth.getUser(session.subject);
+    subject = { uid: rec.uid, email: rec.email || "", name: rec.displayName || "", picture: rec.photoURL || "" };
+  } catch (_e) {}
+  const context = await resolveRequestContextInner(req, accessToken, subject);
+  return {
+    ...context,
+    viewAs: {
+      sessionId: session.sessionId,
+      actorUid: session.actor,
+      subjectUid: session.subject,
+      subjectName: subject.name || subject.email || session.subject,
+      mode: session.mode,
+      startedAt: session.startedAt,
+      exp: session.exp,
+    },
+  };
+}
+
+if (MASTER_ADMIN_ENABLED) {
+  // Every request during a view-as session is audited; writes are blocked in read-only mode.
+  app.use(async (req, res, next) => {
+    if (!req.headers["x-view-as-session"]) return next();
+    if (req.path === "/api/admin/view-as/end") return next();
+    const viewAs = await readViewAsSession(req);
+    if (!viewAs || !viewAs.session) return res.status(viewAs?.status || 401).json({ ok: false, error: viewAs?.error || "invalid view-as session" });
+    const blocked = viewAs.session.mode === "read_only" && ["POST", "PUT", "PATCH", "DELETE"].includes(req.method.toUpperCase());
+    writeAdminAudit(adminAccess.auditEntry(viewAs.session, blocked ? "write_blocked" : "request", req)).catch(() => {});
+    if (blocked) return res.status(403).json({ ok: false, error: "read-only view-as session: changes are blocked" });
+    res.setHeader("x-view-as-active", "1");
+    return next();
+  });
+
+  app.get("/api/admin/whoami", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    res.json({ ok: true, enabled: true, masterAdmin: Boolean(actor) });
+  });
+
+  app.get("/api/admin/view-as/users", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    if (!actor) return res.status(403).json({ ok: false, error: "master_admin required" });
+    try {
+      const q = String(req.query.q || "").trim().toLowerCase();
+      const page = await firebaseAuth.listUsers(1000);
+      const users = page.users
+        .filter((u) => u.uid !== actor.uid)
+        .filter((u) => !q || (u.email || "").toLowerCase().includes(q) || (u.displayName || "").toLowerCase().includes(q))
+        .slice(0, 50)
+        .map((u) => ({ uid: u.uid, email: u.email || "", displayName: u.displayName || "" }));
+      res.json({ ok: true, users });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "could not list users" });
+    }
+  });
+
+  app.post("/api/admin/view-as/start", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    if (!actor) return res.status(403).json({ ok: false, error: "master_admin required" });
+    if (VIEW_AS_SECRET.length < 32) return res.status(503).json({ ok: false, error: "view-as not configured" });
+    try {
+      const { token, session } = adminAccess.startImpersonation({
+        actorUid: actor.uid,
+        actorClaims: actor,
+        subjectUid: String(req.body?.subjectUid || ""),
+        reason: req.body?.reason,
+        secret: VIEW_AS_SECRET,
+        mode: "read_only",
+      });
+      await firebaseAuth.getUser(session.subject);
+      await writeAdminAudit({ ...adminAccess.auditEntry(session, "session_start", req), reason: session.reason });
+      res.json({ ok: true, token, session });
+    } catch (error) {
+      res.status(error?.status || 400).json({ ok: false, error: error?.message || "could not start view-as" });
+    }
+  });
+
+  app.post("/api/admin/view-as/end", async (req, res) => {
+    const session = adminAccess.verify(String(req.headers["x-view-as-session"] || ""), VIEW_AS_SECRET);
+    if (session) await writeAdminAudit(adminAccess.auditEntry(session, "session_end", req));
+    res.json({ ok: true });
+  });
+} else {
+  app.get("/api/admin/whoami", (_req, res) => res.json({ ok: true, enabled: false, masterAdmin: false }));
 }
 
 function requireOperatorAccess(context, res) {

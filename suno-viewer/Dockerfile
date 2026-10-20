@@ -20,6 +20,7 @@ COPY catalog-export-utils.js .
 COPY export-utils.js .
 COPY storage-object-reference.js .
 COPY freshness-utils.js .
+COPY admin-access.js .
 ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "server.js"]

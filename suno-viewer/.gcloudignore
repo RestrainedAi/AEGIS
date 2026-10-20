@@ -8,3 +8,5 @@ dist
 test
 *.tmp
 *.bak
+# OneDrive conflict copies (not part of the build)
+*-VR_Zone*

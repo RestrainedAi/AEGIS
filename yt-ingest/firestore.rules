@@ -56,8 +56,29 @@ service cloud.firestore {
       }
     }
 
-    match /{document=**} {
-      allow read, write: if isPlatformAdmin();
+    // Song version history: immutable once written (never overwrite, never delete).
+    match /sunoSongs/{songId}/versions/{versionId} {
+      allow read, create: if isPlatformAdmin();
+      allow update, delete: if false;
+    }
+
+    // Other song subcollections (e.g. stats/{day}): admin only, as before.
+    match /sunoSongs/{songId}/{sub}/{docId=**} {
+      allow read, write: if isPlatformAdmin() && sub != "versions";
+    }
+
+    // Admin audit log: written by the server (Admin SDK) only; admins can read, nobody edits or deletes.
+    match /adminAuditLog/{entryId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
+    // Catch-all: admin read everywhere; admin write everywhere except the protected paths above.
+    match /{collection}/{document=**} {
+      allow read: if isPlatformAdmin();
+      allow write: if isPlatformAdmin()
+        && collection != "adminAuditLog"
+        && collection != "sunoSongs";
     }
   }
 }

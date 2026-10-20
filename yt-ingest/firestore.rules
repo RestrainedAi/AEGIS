@@ -35,6 +35,17 @@ service cloud.firestore {
     match /sunoSongs/{songId} {
       allow read: if true;
       allow write: if isPlatformAdmin();
+
+      // Plan step 4: versions are immutable (create-only, never update/delete).
+      match /versions/{n} {
+        allow read: if true;
+        allow create: if isPlatformAdmin();
+      }
+    }
+
+    // Plan step 5: view-as audit log is server-written only, admin-readable.
+    match /adminAuditLog/{entryId} {
+      allow read: if isPlatformAdmin();
     }
 
     match /admins/{userId} {

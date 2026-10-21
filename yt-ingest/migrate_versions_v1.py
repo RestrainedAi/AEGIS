@@ -21,6 +21,8 @@ Field handling:
 from __future__ import annotations
 
 import argparse
+import time
+import urllib.error
 import json
 import urllib.parse
 import urllib.request
@@ -118,6 +120,21 @@ def doc_to_v1(doc: dict[str, Any], run_id: str, at: str) -> tuple[dict, dict]:
     return head, version
 
 
+def send(req: urllib.request.Request, ok_conflict: bool = False) -> str:
+    """Send with retries on 429/5xx. ok_conflict: a 409 (already exists) counts as done."""
+    for attempt in range(6):
+        try:
+            urllib.request.urlopen(req, timeout=30).read()
+            return "ok"
+        except urllib.error.HTTPError as e:
+            if ok_conflict and e.code == 409:
+                return "exists"
+            if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
+                raise
+            time.sleep(2 ** attempt)
+    return "ok"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -160,14 +177,15 @@ def main() -> int:
                 data=json.dumps({"fields": {k: to_fs(v) for k, v in v1.items()}}).encode(),
                 method="POST", headers={"Authorization": f"Bearer {get_access_token()}",
                                         "Content-Type": "application/json"})
-            urllib.request.urlopen(vreq, timeout=30).read()  # createDocument fails if it exists
+            if send(vreq, ok_conflict=True) == "exists":  # resume: v1 made earlier, head patch missed
+                stats["resumedExistingV1"] = stats.get("resumedExistingV1", 0) + 1
             mask = "&".join(f"updateMask.fieldPaths={k}" for k in head)
             hreq = urllib.request.Request(
                 f"https://firestore.googleapis.com/v1/{name}?{mask}",
                 data=json.dumps({"fields": {k: to_fs(v) for k, v in head.items()}}).encode(),
                 method="PATCH", headers={"Authorization": f"Bearer {get_access_token()}",
                                          "Content-Type": "application/json"})
-            urllib.request.urlopen(hreq, timeout=30).read()
+            send(hreq)
     stats["mode"] = "apply" if args.apply else "dry_run"
     Path("migrate_versions_v1_report.json").write_text(json.dumps(stats, indent=2))
     print(json.dumps(stats, indent=2))

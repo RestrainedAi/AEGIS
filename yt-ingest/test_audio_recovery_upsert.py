@@ -97,5 +97,46 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(db.writes[0]['media']['audioUrl'], R['derivedAudioUrl'])
 
+    def missing_original(self):
+        d = document()
+        d['media']['audioRecovery'].update(originalMissing=True, originalGeneration='', originalSha256='')
+        return d
+
+    def test_original_missing_preserves_selection(self):
+        d = self.missing_original()
+        ok, db = self.upsert([d], has_audio=False)
+        self.assertTrue(ok)
+        self.assertEqual(db.writes[0]['media']['audioUrl'], R['derivedAudioUrl'])
+        self.assertEqual(db.writes[0]['media']['audioRecovery'], d['media']['audioRecovery'])
+        self.assertTrue(db.writes[0]['gcs']['audio'])
+
+    def test_empty_original_without_flag_still_fails(self):
+        d = self.missing_original()
+        del d['media']['audioRecovery']['originalMissing']
+        ok, db = self.upsert([d])
+        self.assertFalse(ok)
+        self.assertEqual(db.writes, [])
+
+    def test_original_missing_with_original_hash_fails(self):
+        d = self.missing_original()
+        d['media']['audioRecovery']['originalSha256'] = 'b'*64
+        ok, db = self.upsert([d])
+        self.assertFalse(ok)
+        self.assertEqual(db.writes, [])
+
+    def test_original_missing_non_bool_fails(self):
+        d = self.missing_original()
+        d['media']['audioRecovery']['originalMissing'] = 'yes'
+        ok, db = self.upsert([d])
+        self.assertFalse(ok)
+        self.assertEqual(db.writes, [])
+
+    def test_original_missing_still_checks_derived_hash(self):
+        d = self.missing_original()
+        d['media']['audioRecovery']['derivedSha256'] = 'zz'
+        ok, db = self.upsert([d])
+        self.assertFalse(ok)
+        self.assertEqual(db.writes, [])
+
 
 if __name__ == '__main__': unittest.main()

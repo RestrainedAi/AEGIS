@@ -132,20 +132,26 @@ def preserve_audio_recovery(existing, incoming):
     if "audioRecovery" not in media:
         return
     recovery = media["audioRecovery"]
+    # originalMissing=True: Suno never served a native MP3, so there is no original
+    # generation/hash to pin. It must be explicit, and those two fields must be empty.
+    original_missing = isinstance(recovery, dict) and recovery.get("originalMissing") is True
+    original_keys = () if original_missing else ("originalGeneration", "originalSha256")
     required = ("derivedAudioUrl", "derivedSha256", "originalAudioUrl",
-                "originalGeneration", "originalSha256", "sourceVideoUrl",
+                *original_keys, "sourceVideoUrl",
                 "sourceVideoGeneration", "sourceVideoSha256", "provenanceUrl",
                 "verifiedAt")
     if (not isinstance(recovery, dict)
             or recovery.get("kind") != "derived-from-video"
             or recovery.get("nativeOriginal") is not False
+            or recovery.get("originalMissing") not in (None, True, False)
+            or (original_missing and (recovery.get("originalGeneration") or recovery.get("originalSha256")))
             or any(not recovery.get(key) for key in required)):
         raise ValueError("Existing audioRecovery is incomplete; explicit reconciliation required")
     if (media.get("audioUrl") != recovery["derivedAudioUrl"]
             or not str(recovery["derivedAudioUrl"]).startswith("gs://")
             or not str(recovery["derivedAudioUrl"]).lower().endswith(".mp3")
             or any(not re.fullmatch(r"[0-9a-f]{64}", str(recovery[key]))
-                   for key in ("derivedSha256", "originalSha256", "sourceVideoSha256"))):
+                   for key in ("derivedSha256", *original_keys[1:], "sourceVideoSha256"))):
         raise ValueError("Existing audioRecovery selection is inconsistent; explicit reconciliation required")
     incoming["media"]["audioUrl"] = recovery["derivedAudioUrl"]
     incoming["media"]["audioExt"] = "mp3"

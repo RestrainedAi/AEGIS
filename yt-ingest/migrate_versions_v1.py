@@ -6,7 +6,17 @@ version docs with create-only semantics (Firestore precondition exists=false)
 and adds head fields; it never changes or removes existing fields or objects.
 Needs Thomas's final yes before --apply. Take an on-demand backup first:
   gcloud firestore backups schedules list --database="(default)"   (daily 14d exists)
-  gcloud firestore export gs://aeonimus-workspaces/backups/firestore/pre-versioning-$(date +%Y%m%d)
+  gcloud firestore export gs://aeonimus-suno-media/backups/firestore/pre-versioning-$(date +%Y%m%d)
+(aeonimus-workspaces lives in project sunopipeline; the Firestore agent cannot export there.)
+
+Field handling:
+- media.audioRecovery (promoted derived audio) -> assets.audio.derived + recovery copy.
+- derivedAudioRecovery (verified but NOT promoted) -> assets.audio stays "missing" and
+  carries derivedCandidate (url/sha256/provenance) so nothing is lost.
+- largeArt (top-level, versioned layout) -> assets.coverLarge from largeArt.gcs with
+  sha256/bytes; source.coverLarge from largeArt.sourceUrl.
+- Removed / un-published songs are marked publishState "unpublished" with label
+  "Un-Published". They are never deleted; the existing status field is not touched.
 """
 from __future__ import annotations
 
@@ -56,16 +66,25 @@ def to_fs(v: Any) -> dict[str, Any]:
     return {"stringValue": str(v)}
 
 
+UNPUBLISHED_LABEL = "Un-Published"
+
+
+def is_unpublished(f: dict[str, Any]) -> bool:
+    return (bool(f.get("isRemoved"))
+            or str(f.get("status") or "").lower() in ("removed_from_suno", "unpublished", "un-published"))
+
+
 def doc_to_v1(doc: dict[str, Any], run_id: str, at: str) -> tuple[dict, dict]:
     f = {k: fval(v) for k, v in (doc.get("fields") or {}).items()}
     gcs = f.get("gcs") or {}       # booleans: {audio: true, ...}
     media = f.get("media") or {}   # gs:// paths: audioUrl/videoUrl/thumbUrl/largeArtUrl
+    large = f.get("largeArt") if isinstance(f.get("largeArt"), dict) else {}
     meta = {k: f.get(k) for k in sv.TRACKED_FIELDS}
     source = {
         "audio": {"url": f.get("audio_url") or f.get("audioUrl") or ""},
         "video": {"url": f.get("video_url") or f.get("videoUrl") or ""},
-        "cover": {"url": f.get("image_url") or f.get("imageUrl") or ""},
-        "coverLarge": {"url": f.get("image_large_url") or f.get("imageLargeUrl") or ""},
+        "cover": {"url": f.get("image_url") or f.get("imageUrl") or f.get("artworkUrl") or ""},
+        "coverLarge": {"url": f.get("image_large_url") or f.get("imageLargeUrl") or large.get("sourceUrl") or ""},
     }
     source = {k: v for k, v in source.items() if v["url"] and not v["url"].startswith("gs://")}
     assets = {}
@@ -74,17 +93,28 @@ def doc_to_v1(doc: dict[str, Any], run_id: str, at: str) -> tuple[dict, dict]:
         path = media.get(key)
         ok = bool(path) and gcs.get(flag) is not False
         assets[asset] = {"gcs": path, "status": "ok"} if ok else {"status": "missing"}
-        if ok and isinstance(media.get(asset + "Recovery"), dict):
+        rec = media.get(asset + "Recovery")
+        if ok and isinstance(rec, dict):
             assets[asset]["derived"] = True
+            assets[asset]["recovery"] = rec
+    if assets["coverLarge"]["status"] == "missing" and large.get("gcs"):
+        assets["coverLarge"] = {"gcs": large["gcs"], "status": "ok",
+                                **{k: large[k] for k in ("sha256", "bytes", "capturedAt") if large.get(k)}}
+    cand = f.get("derivedAudioRecovery")
+    if isinstance(cand, dict) and assets["audio"]["status"] == "missing":
+        assets["audio"]["derivedCandidate"] = cand
     version = {"n": 1, "capturedAt": at, "runId": run_id, "changedFields": ["initial"],
                "metadata": sv.canonical_metadata(meta), "source": source, "assets": assets,
                "migratedFrom": "flat-doc"}
     version["metadataSha256"] = sv.metadata_hash(version["metadata"])
-    removed = bool(f.get("isRemoved")) or f.get("status") == "removed_from_suno"
+    removed = is_unpublished(f)
     head = {"currentVersion": 1, "publishState": "unpublished" if removed else "published",
-            "absenceCount": 0}
+            "publishStatusLabel": UNPUBLISHED_LABEL if removed else "Published", "absenceCount": 0}
     if removed:
         head["unpublishedAt"] = f.get("removedAt") or at
+    clash = [k for k in head if k in f]
+    if clash:  # never overwrite an existing field
+        raise ValueError(f"head field(s) already present: {clash}")
     return head, version
 
 

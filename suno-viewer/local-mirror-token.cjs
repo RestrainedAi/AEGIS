@@ -1,25 +1,20 @@
 'use strict';
-const { createHash, timingSafeEqual } = require('node:crypto');
+const { bearerMatches } = require('./token-hash-auth.cjs');
 const EXPECTED_SERVICE_ACCOUNT = 'sundrop-local-reader@stable-framing-482501-t9.iam.gserviceaccount.com';
 const SCOPE = 'https://www.googleapis.com/auth/devstorage.read_only';
 
 function installLocalMirrorTokenRoute(app, { getAccessToken, fetchImpl = global.fetch }) {
-  if (process.env.SUNDROP_HARVEST_TEST_UNTIL) {
-    require('./harvest-test-token.cjs').installHarvestTestTokenRoute(app, { getAccessToken, fetchImpl });
-  }
+  // The expired harvest-test token route was removed (S4, 2026-10-20).
   app.post('/api/local-mirror/token', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    const expected = process.env.SUNDROP_LOCAL_MIRROR_CLIENT_SHA256 || '';
     const serviceAccount = process.env.SUNDROP_LOCAL_MIRROR_SERVICE_ACCOUNT || '';
-    if (!/^[a-fA-F0-9]{64}$/.test(expected) || serviceAccount !== EXPECTED_SERVICE_ACCOUNT) {
+    // A 256-bit random value encoded as hex or base64url; env may list several hashes during rotation.
+    const authorized = bearerMatches(req.headers?.authorization, process.env.SUNDROP_LOCAL_MIRROR_CLIENT_SHA256);
+    if (authorized === null || serviceAccount !== EXPECTED_SERVICE_ACCOUNT) {
       return res.status(503).json({ error: 'Local mirror authentication is unavailable.' });
     }
-    const authorization = req.headers?.authorization;
-    // A 256-bit random value encoded as hex or base64url; never accept arbitrary bodies/targets.
-    const match = typeof authorization === 'string' && /^Bearer ([A-Za-z0-9_-]{43,128})$/.exec(authorization);
-    const supplied = createHash('sha256').update(match ? match[1] : '').digest();
-    const authorized = timingSafeEqual(supplied, Buffer.from(expected, 'hex'));
-    if (!match || !authorized) return res.status(401).json({ error: 'Unauthorized.' });
+    if (!authorized) return res.status(401).json({ error: 'Unauthorized.' });
+    console.log(JSON.stringify({ severity: 'NOTICE', logName: 'token-mint', route: 'local-mirror' }));
     try {
       const workloadToken = await getAccessToken();
       if (typeof workloadToken !== 'string' || !workloadToken) throw new Error('Missing workload identity');

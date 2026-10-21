@@ -17,6 +17,10 @@ RUN apt-get update -qq && \
 # verified by sha256, then checked at build time: no --enable-gpl/--enable-nonfree, has libmp3lame.
 ARG FFMPEG_LGPL_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-20-13-08/ffmpeg-N-127790-g56dbd4cd37-linux64-lgpl.tar.xz
 ARG FFMPEG_LGPL_SHA256=176bdd3a63e9cd7c56438734118a4fd074872abc02318231a3439dbce6625367
+# The Playwright base image ships Ubuntu's GPL ffmpeg/ffprobe apt package; remove it from
+# the image so only the pinned LGPL build exists (build fails if it is still present).
+RUN apt-get purge -y -qq ffmpeg && rm -rf /var/lib/apt/lists/* && \
+    ! command -v ffmpeg && ! command -v ffprobe
 RUN curl -fsSL -o /tmp/ffmpeg.tar.xz "${FFMPEG_LGPL_URL}" && \
     echo "${FFMPEG_LGPL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - && \
     mkdir -p /opt/ffmpeg-lgpl && tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg-lgpl --strip-components=1 && \

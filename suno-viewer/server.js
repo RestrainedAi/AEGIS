@@ -3510,11 +3510,20 @@ async function loadLatestSourceSnapshot(accessToken) {
       canonicalAccountLabel(handle) ||
       handle;
     const latest = await loadLatestSongForSource(sourceId, accessToken);
-    if (!latest) continue;
+    const ingestionMode = fsString(sourceDoc, "ingestionMode") || "public_profile";
+    const authorityStatus = fsString(sourceDoc, "authorityStatus") || "partial_source";
+    const isAuthoritative =
+      ["owned_library", "official_export"].includes(ingestionMode) &&
+      authorityStatus === "verified";
     accounts.push({
-      ...latest,
+      ...(latest || {}),
       handle,
       accountLabel,
+      sourceId,
+      ingestionMode,
+      authorityStatus,
+      isAuthoritative,
+      lastSourceError: fsString(sourceDoc, "lastSourceError"),
     });
   }
 

@@ -242,7 +242,12 @@ def get_firestore_docs_rest(token: str, source_id: str) -> dict:
                       for v in tags_field.get("arrayValue",{}).get("values",[])]
         tags_str   = ",".join(t for t in tags_list if t)
 
+        recovery = map_fields(media.get("audioRecovery"))
+        native_retry = map_fields(recovery.get("nativeRetry"))
         docs[clip_id] = {
+            "audioRecoveryKind":  fval(recovery.get("kind")),
+            "nativeRetryNextAt":  fval(native_retry.get("nextAttemptAt")),
+            "nativeRetryAttempts": fval(native_retry.get("attempts")),
             "title":          pick_first(fval(fields.get("title")), fval(fields.get("rawTitle"))),
             "createdAt":      fval(fields.get("createdAt")),
             "duration":       pick_first(fval(fields.get("duration")), fval(fields.get("durationSeconds"))),
@@ -588,8 +593,13 @@ def compute_handle_delta(token: str, handle: str, source_id: str,
             "songKey":       clip_id, "handle": handle,
             "reason":        ("retained:" if clip_id in removed_ids else "") + f"missing_gcs:{','.join(missing_assets)}",
             "title":         doc.get("title",""),
-            "audio_url":     doc.get("audioUrl", doc.get("audio_url","")),
+            # A gs:// path is our own copy (e.g. a derived listening copy), never a Suno source.
+            "audio_url":     "" if str(doc.get("audioUrl", "")).startswith("gs://")
+                             else doc.get("audioUrl", doc.get("audio_url","")),
             "video_url":     doc.get("videoUrl", doc.get("video_url","")),
+            "audioRecoveryKind": doc.get("audioRecoveryKind", ""),
+            "nativeRetryNextAt": doc.get("nativeRetryNextAt", ""),
+            "nativeRetryAttempts": doc.get("nativeRetryAttempts", ""),
             "image_url":     doc.get("thumbUrl",  doc.get("image_url",
                              doc.get("coverUrl",""))),
             "createdAt":     doc.get("createdAt",""),
@@ -778,7 +788,8 @@ def main():
 
     FIELDNAMES = ["songKey","handle","reason","title",
                   "audio_url","video_url","image_url","createdAt","duration",
-                  "tags","prompt","lyrics","modelName","isInstrumental"]
+                  "tags","prompt","lyrics","modelName","isInstrumental",
+                  "audioRecoveryKind","nativeRetryNextAt","nativeRetryAttempts"]
     with open(OUT_CSV, "w", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=FIELDNAMES).writeheader()
         csv.DictWriter(f, fieldnames=FIELDNAMES).writerows(all_delta_rows)

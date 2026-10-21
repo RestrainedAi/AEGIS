@@ -30,7 +30,7 @@ class AudioIntegrityTests(unittest.TestCase):
             command = ['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=10']
             if audio:
                 command += ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000']
-            command += ['-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p']
+            command += ['-t', '3', '-c:v', 'mpeg4', '-pix_fmt', 'yuv420p']  # LGPL encoder (no GPL libx264)
             if audio:
                 command += ['-c:a', 'aac']
             subprocess.run(command + [str(path)], check=True)

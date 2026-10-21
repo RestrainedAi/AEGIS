@@ -453,6 +453,19 @@ Catalog export was still rebuilt from the successfully synced items.
 </body></html>"""
 
 
+AUDIO_GAP_ALERTS_PATH = WORK_DIR / "audio_gap_alerts.json"
+
+
+def read_audio_gap_alerts() -> dict:
+    """Songs with gcs.audio false for more than 24 h (written by audio_gap_alerts.py)."""
+    try:
+        data = json.loads(AUDIO_GAP_ALERTS_PATH.read_text(encoding="utf-8"))
+        return {"count": int(data.get("count") or 0), "songs": (data.get("songs") or [])[:50],
+                "thresholdHours": data.get("thresholdHours", 24)}
+    except Exception:
+        return {}
+
+
 def build_status_summary(
     mode: str,
     catalog_age: float | None,
@@ -463,7 +476,9 @@ def build_status_summary(
     source: dict,
     partial_harvest_exit: int = 0,
     error_detail: str = "",
+    audio_gaps: dict | None = None,
 ) -> dict:
+    audio_gap_count = int((audio_gaps or {}).get("count") or 0)
     stale = catalog_age is not None and catalog_age > STALE_HOURS
     queue_errors = queue.get("error", 0)
     source_content_age = source.get("sourceContentAgeHours")
@@ -489,6 +504,9 @@ def build_status_summary(
     elif queue_errors > 0:
         status = "queue_errors"
         email_reason = "queue_errors"
+    elif audio_gap_count > 0:
+        status = "audio_gaps"
+        email_reason = "audio_missing_over_24h"
     else:
         status = "healthy"
         email_reason = ""
@@ -506,6 +524,7 @@ def build_status_summary(
         "harvestSummary": harvest,
         "sourceFreshness": source,
         "partialHarvestExitCode": partial_harvest_exit,
+        "audioGapAlerts": audio_gaps or {"count": 0, "songs": []},
         "errorDetail": error_detail[:2000] if error_detail else "",
     }
 
@@ -530,6 +549,8 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
     songs   = fs_count_songs(token)
     harvest = read_harvest_report()
     source  = fs_get_source_freshness(token)
+    audio_gaps = read_audio_gap_alerts()
+    audio_gap_count = int(audio_gaps.get("count") or 0)
 
     stale       = catalog_age is not None and catalog_age > STALE_HOURS
     queue_errors = queue.get("error", 0)
@@ -547,6 +568,7 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         source,
         partial_harvest_exit=partial_harvest_exit,
         error_detail=error_detail,
+        audio_gaps=audio_gaps,
     )
     write_status_summary(summary)
     log_info(
@@ -571,6 +593,8 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         subject = f"⚠️ Aeonimus Catalog STALE ({catalog_age:.0f}h) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     elif queue_errors > 0:
         subject = f"⚠️ Aeonimus Upload Queue has {queue_errors} error(s) — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+    elif audio_gap_count > 0:
+        subject = f"\u26a0\ufe0f Aeonimus {audio_gap_count} song(s) without audio >24h \u2014 {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     else:
         subject = f"✅ Aeonimus Pipeline OK — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
 
@@ -584,6 +608,7 @@ def run(mode: str, error_detail: str = "", partial_harvest_exit: int = 0):
         and not source_idle
         and not stale
         and queue_errors == 0
+        and audio_gap_count == 0
     ):
         log_info("[monitor] Pipeline healthy - skipping digest email (daily-digest will send it)")
         return

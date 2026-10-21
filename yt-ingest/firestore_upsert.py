@@ -132,6 +132,15 @@ def preserve_audio_recovery(existing, incoming):
     if "audioRecovery" not in media:
         return
     recovery = media["audioRecovery"]
+    # Suno later served the native file and it was recorded as a new version:
+    # the native selection stands; the recovery record stays as history.
+    if (isinstance(recovery, dict) and recovery.get("nativeSupersededAt")
+            and recovery.get("nativeAudioUrl")
+            and media.get("audioUrl") == recovery["nativeAudioUrl"]):
+        incoming["media"]["audioUrl"] = recovery["nativeAudioUrl"]
+        incoming["media"]["audioExt"] = media.get("audioExt") or incoming["media"].get("audioExt")
+        incoming["gcs"]["audio"] = True
+        return
     # originalMissing=True: Suno never served a native MP3, so there is no original
     # generation/hash to pin. It must be explicit, and those two fields must be empty.
     original_missing = isinstance(recovery, dict) and recovery.get("originalMissing") is True
@@ -193,6 +202,7 @@ def upsert_song_after_download(
     source_platform: str = "suno",
     db=None,                     # pass existing client to avoid re-init overhead
     project:        str  = "",
+    audio_recovery: dict = None,  # derived-from-video listening copy (originalMissing)
 ) -> bool:
     """
     Write (or merge-update) a sunoSongs document after successful GCS upload.
@@ -248,6 +258,17 @@ def upsert_song_after_download(
                 "thumb": has_thumb,
             },
         }
+
+        if audio_recovery:
+            rec = dict(audio_recovery)
+            if (rec.get("kind") != "derived-from-video" or rec.get("nativeOriginal") is not False
+                    or not str(rec.get("derivedAudioUrl", "")).startswith("gs://")):
+                raise ValueError("audio_recovery must be a verified derived-from-video record")
+            rec.pop("reused", None)
+            doc_data["media"]["audioUrl"] = rec["derivedAudioUrl"]
+            doc_data["media"]["audioExt"] = "mp3"
+            doc_data["media"]["audioRecovery"] = rec
+            doc_data["gcs"]["audio"] = True
 
         # Preserve any existing non-empty title instead of overwriting it with a blank.
         if title:
@@ -344,6 +365,106 @@ def upsert_song_after_download(
 
     except Exception as e:
         print(f"  [FIRESTORE] FAILED to upsert {clip_id}: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return False
+
+
+def record_native_retry(clip_id: str, retry: dict, db=None) -> bool:
+    """Store the weekly native-MP3 retry schedule on an existing derived recovery."""
+    try:
+        if db is None:
+            from google.cloud import firestore
+            db = firestore.Client()
+        ref = db.collection("sunoSongs").document(clip_id)
+        snap = ref.get()
+        rec = ((snap.to_dict() or {}).get("media") or {}).get("audioRecovery") if snap.exists else None
+        if not isinstance(rec, dict) or rec.get("kind") != "derived-from-video":
+            return False
+        ref.update({"media.audioRecovery.nativeRetry": retry})
+        return True
+    except Exception as e:
+        print(f"  [FIRESTORE] FAILED to record native retry for {clip_id}: {type(e).__name__}", file=sys.stderr)
+        return False
+
+
+def native_version_payload(existing: dict, latest_version: dict, native_uri: str, audio_ext: str,
+                           native_sha256: str, native_generation: str, at: str, run_id: str):
+    """Pure: (version_docs, head_updates) for a native MP3 that replaces a derived copy as a NEW version.
+
+    A song that was never versioned first gets versions/1 describing the derived state,
+    so the derived copy stays visible as its own version.
+    """
+    media = existing.get("media") or {}
+    rec = media.get("audioRecovery") or {}
+    if rec.get("kind") != "derived-from-video" or rec.get("nativeSupersededAt"):
+        raise ValueError("no open derived recovery to supersede")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(native_sha256)) or not native_generation:
+        raise ValueError("native audio must be pinned by sha256 and generation")
+    versions = []
+    latest = latest_version or {}
+    if not existing.get("currentVersion"):
+        latest = {"n": 1, "capturedAt": at, "runId": run_id, "changedFields": ["initial"],
+                  "metadata": {}, "source": {}, "migratedFrom": "derived-recovery",
+                  "assets": {"audio": {"gcs": rec.get("derivedAudioUrl"), "status": "ok", "derived": True,
+                                       "sha256": rec.get("derivedSha256"), "recovery": rec}}}
+        versions.append(latest)
+    n = int(existing.get("currentVersion") or 1) + 1
+    assets = dict(latest.get("assets") or {})
+    assets["audio"] = {"gcs": native_uri, "status": "ok", "sha256": native_sha256,
+                       "generation": str(native_generation), "native": True}
+    version = {
+        "n": n, "capturedAt": at, "runId": run_id, "changedFields": ["audio"],
+        "metadata": latest.get("metadata") or {}, "metadataSha256": latest.get("metadataSha256", ""),
+        "source": latest.get("source") or {}, "assets": assets,
+        "supersedes": {"version": n - 1, "derivedAudioUrl": rec.get("derivedAudioUrl"),
+                       "derivedSha256": rec.get("derivedSha256")},
+    }
+    head = {
+        "currentVersion": n,
+        "media.audioUrl": native_uri,
+        "media.audioExt": audio_ext,
+        "media.audioRecovery.nativeSupersededAt": at,
+        "media.audioRecovery.nativeAudioUrl": native_uri,
+        "media.audioRecovery.nativeSha256": native_sha256,
+        "media.audioRecovery.nativeGeneration": str(native_generation),
+        "media.audioRecovery.supersededInVersion": n,
+        "gcs.audio": True,
+    }
+    versions.append(version)
+    return versions, head
+
+
+def record_native_audio_version(clip_id: str, native_uri: str, audio_ext: str, native_sha256: str,
+                                native_generation: str, db=None, run_id: str = "") -> bool:
+    """Suno finally served the native file: create versions/{n+1} (create-only) and point the head at it.
+
+    The derived copy, its provenance and the earlier version are never touched.
+    """
+    try:
+        from google.cloud import firestore
+        if db is None:
+            db = firestore.Client()
+        at = datetime.now(timezone.utc).isoformat()
+        ref = db.collection("sunoSongs").document(clip_id)
+
+        @firestore.transactional
+        def write(transaction):
+            snap = ref.get(transaction=transaction)
+            existing = snap.to_dict() if snap.exists else {}
+            n_prev = int(existing.get("currentVersion") or 1)
+            prev = ref.collection("versions").document(str(n_prev)).get(transaction=transaction)
+            versions, head = native_version_payload(existing, prev.to_dict() if prev.exists else {},
+                                                   native_uri, audio_ext, native_sha256,
+                                                   native_generation, at, run_id or f"native-{at[:19]}")
+            for version in versions:  # create-only: fails if the version already exists
+                transaction.create(ref.collection("versions").document(str(version["n"])), version)
+            transaction.update(ref, head)
+
+        write(db.transaction())
+        print(f"  [FIRESTORE] native audio recorded as new version for {clip_id}")
+        return True
+    except Exception as e:
+        print(f"  [FIRESTORE] FAILED to record native version for {clip_id}: {type(e).__name__}: {e}",
               file=sys.stderr)
         return False
 

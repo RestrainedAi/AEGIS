@@ -28,7 +28,9 @@ import subprocess
 import tempfile
 import time
 import shutil
-from firestore_upsert import upsert_song_after_download, update_song_metadata_only
+from firestore_upsert import (upsert_song_after_download, update_song_metadata_only,
+                              record_native_retry, record_native_audio_version)
+import derived_audio
 from audio_integrity import InvalidAudio, expected_duration, validate_audio, validate_video
 import urllib.request
 from pathlib import Path
@@ -441,6 +443,11 @@ async def process_clip(row: dict) -> dict:
             result["errors"].append(f"metadata update failed for {clip_id}")
         return result
     retained = reason.startswith("retained:")
+    # Songs already playing a derived listening copy: the native MP3 is retried weekly.
+    has_recovery = row.get("audioRecoveryKind") == derived_audio.DERIVE_KIND
+    recovery_schedule = {"kind": row.get("audioRecoveryKind"),
+                         "nativeRetry": {"nextAttemptAt": row.get("nativeRetryNextAt", ""),
+                                         "attempts": row.get("nativeRetryAttempts") or 0}}
 
     # Determine which assets are needed based on reason
     need_audio = "audio" in reason or reason == "new"
@@ -480,6 +487,11 @@ async def process_clip(row: dict) -> dict:
     if need_thumb and thumb_exists:
         print(f"    [SKIP] thumb already in GCS")
         need_thumb = False
+
+    if need_audio and has_recovery and not derived_audio.native_retry_due(recovery_schedule):
+        print(f"    [SKIP] native audio retry not due (derived copy in place; weekly retry)")
+        need_audio = False
+        result["audio_deferred"] = True
 
     if not need_audio and not need_video and not need_thumb:
         print(f"    [OK] Assets already in GCS -- metadata refresh eligible")
@@ -582,6 +594,34 @@ async def process_clip(row: dict) -> dict:
                 if attempt < MAX_RETRIES:
                     time.sleep(2 ** attempt)
  
+    if has_recovery and result["audio"] and result.get("audio_ext"):
+        # Suno served the native file after a derived copy was in place: new version.
+        result["native_after_recovery"] = True
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if need_audio and has_recovery:
+        # Derived copy keeps playing; schedule the next weekly native attempt.
+        print(f"    [INFO] native audio still refused; derived copy stays, retry in 7 days")
+        result["native_retry"] = derived_audio.next_native_retry(
+            recovery_schedule["nativeRetry"], now_iso, "audio not captured")
+        need_audio = False
+    elif need_audio and not retained:
+        # Native MP3 refused (CDN 403 or other error). Fall back to the stored, verified MP4.
+        if gs_exists(video_gs) and gs_video_valid(video_gs, duration):
+            try:
+                rec = derived_audio.derive_listening_copy(
+                    handle, clip_id, video_gs, duration, native_error="audio not captured")
+                print(f"    [OK] derived listening copy -> {rec['derivedAudioUrl']}"
+                      f"{' (reused)' if rec.get('reused') else ''}")
+                result["audio"] = True
+                result["audio_ext"] = "mp3"
+                result["audio_recovery"] = rec
+                need_audio = False
+            except Exception as exc:
+                print(f"    [FAIL] derive from video failed for {clip_id}: {exc}", file=sys.stderr)
+        else:
+            print(f"    [FAIL] no verified stored video to derive audio from", file=sys.stderr)
+
     # Log remaining failures
     if need_audio:
         msg = f"audio not captured for {clip_id}"
@@ -669,8 +709,18 @@ async def _process_all(rows: list) -> list:
     for i, row in enumerate(rows, 1):
         print(f"\n[{i}/{len(rows)}] Processing {row['songKey']}")
         result = await process_clip(row)
+        clip = row.get("songKey", "")
+        if result.get("native_retry"):
+            record_native_retry(clip, result["native_retry"])
+        if result.get("native_after_recovery"):
+            native_uri = gcs_path(row.get("handle", ""), clip, result.get("audio_ext") or "mp3")
+            sha, gen = derived_audio.gs_sha256_and_generation(native_uri)
+            if not (sha and gen and record_native_audio_version(
+                    clip, native_uri, result.get("audio_ext") or "mp3", sha, gen)):
+                result["errors"].append(f"native audio stored but version not recorded for {clip}")
         if result.get("audio") and not row.get("reason", "").startswith("retained:"):
             upsert_song_after_download(
+                audio_recovery = result.get("audio_recovery"),
                 clip_id        = row.get("songKey", ""),
                 handle         = row.get("handle", ""),
                 title          = row.get("title", ""),

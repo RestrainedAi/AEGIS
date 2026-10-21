@@ -175,6 +175,9 @@ else
     echo "[WARN] Post-harvest audio gap check unavailable; preserving prior gap state."
 fi
 
+# Nightly audit flag: songs without audio for more than 24 h go into the monitor report.
+python3 "${WORK_DIR}/audio_gap_alerts.py" || echo "[WARN] Audio gap alert check unavailable."
+
 # Durable local-delivery journal; failure is reported without replaying acquisition.
 COMPLETION_EXIT=0
 if python3 "${WORK_DIR}/harvest_completion.py" \

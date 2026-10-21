@@ -3,7 +3,7 @@ WORKDIR /app
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        apt-transport-https ca-certificates gnupg curl ffmpeg && \
+        apt-transport-https ca-certificates gnupg curl xz-utils && \
     curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
         | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
@@ -12,12 +12,31 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends google-cloud-cli && \
     rm -rf /var/lib/apt/lists/*
 
+# FFmpeg: LGPL build only (no GPL tools). Ubuntu's apt ffmpeg is a GPL build and is
+# NOT installed. Pinned BtbN autobuild (same build that made the Oct 20 listening copies),
+# verified by sha256, then checked at build time: no --enable-gpl/--enable-nonfree, has libmp3lame.
+ARG FFMPEG_LGPL_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-20-13-08/ffmpeg-N-127790-g56dbd4cd37-linux64-lgpl.tar.xz
+ARG FFMPEG_LGPL_SHA256=176bdd3a63e9cd7c56438734118a4fd074872abc02318231a3439dbce6625367
+RUN curl -fsSL -o /tmp/ffmpeg.tar.xz "${FFMPEG_LGPL_URL}" && \
+    echo "${FFMPEG_LGPL_SHA256}  /tmp/ffmpeg.tar.xz" | sha256sum -c - && \
+    mkdir -p /opt/ffmpeg-lgpl && tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg-lgpl --strip-components=1 && \
+    ln -s /opt/ffmpeg-lgpl/bin/ffmpeg /usr/local/bin/ffmpeg && \
+    ln -s /opt/ffmpeg-lgpl/bin/ffprobe /usr/local/bin/ffprobe && \
+    rm /tmp/ffmpeg.tar.xz && \
+    ! dpkg -s ffmpeg >/dev/null 2>&1 && \
+    ffmpeg -hide_banner -version | head -1 && \
+    ! ffmpeg -hide_banner -version | grep -qE -- '--enable-(gpl|nonfree)' && \
+    ffmpeg -hide_banner -encoders | grep -q libmp3lame
+ENV FFMPEG_BIN=/usr/local/bin/ffmpeg
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 
 COPY build_manifest_from_studio_api.py .
 COPY download_media_gcs.py .
+COPY derived_audio.py .
+COPY audio_gap_alerts.py .
 COPY audio_integrity.py .
 COPY media_validation_receipts.py .
 COPY delta_check_firestore.py .

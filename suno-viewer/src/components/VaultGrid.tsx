@@ -2534,7 +2534,7 @@ function formatSessionDuration(durationHours: number) {
 }
 
 export default function VaultGrid() {
-  const { session, loadingSession, token, sessionDurationHours, setSessionDurationHours } = useAuth()
+  const { session, loadingSession, token, sessionDurationHours, setSessionDurationHours, firebaseUser } = useAuth()
   const initialViewMode = useMemo<'grid' | 'catalog'>(() => {
     const params = new URLSearchParams(window.location.search)
     return params.get('view') === 'catalog' ? 'catalog' : 'grid'
@@ -4000,6 +4000,27 @@ export default function VaultGrid() {
   const onSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value); setPage(1)
   }, [])
+  const clearSearch = useCallback(() => {
+    setSearch(''); setPage(1)
+  }, [])
+  // Search results (and the derived match highlights) belong to one signed-in
+  // user and one Suno account: reset the term on sign-out, account switch, or
+  // a change of the selected Suno account.
+  const signedInUid = firebaseUser?.uid || ''
+  const previousUidRef = useRef(signedInUid)
+  useEffect(() => {
+    if (previousUidRef.current !== signedInUid) {
+      previousUidRef.current = signedInUid
+      clearSearch()
+    }
+  }, [signedInUid, clearSearch])
+  const previousAcctRef = useRef(acct)
+  useEffect(() => {
+    if (previousAcctRef.current !== acct) {
+      previousAcctRef.current = acct
+      clearSearch()
+    }
+  }, [acct, clearSearch])
 
   const toggleSelected = useCallback((song: SunoSong) => {
     if (!downloadAccess.batchEnabled) return
@@ -4755,18 +4776,39 @@ export default function VaultGrid() {
             </div>
           </div>
         )}
+        <div style={{ position: 'relative', width: '100%' }}>
         <input
-          type="text" placeholder="Search title, account, tags, or lyrics…"
+          type="text" aria-label="Search the Vault"
+          onKeyDown={(event) => { if (event.key === 'Escape' && search) { event.preventDefault(); clearSearch() } }}
+          placeholder="Search title, account, tags, or lyrics…"
           value={search} onChange={onSearch}
           style={{
             ...selStyle,
             width: '100%',
             minWidth: 200,
+            paddingRight: 32,
+            boxSizing: 'border-box',
             outline: 'none',
             background: isDesktopVaultShell ? '#111111' : selStyle.background,
             border: isDesktopVaultShell ? '1px solid rgba(255,255,255,0.06)' : selStyle.border,
           }}
         />
+        {search && (
+          <button
+            type="button"
+            onClick={clearSearch}
+            aria-label="Clear search"
+            title="Clear search (Esc)"
+            style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'transparent', border: 'none', color: '#9fb0d0', fontSize: 16,
+              lineHeight: 1, padding: '4px 6px', cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        )}
+        </div>
         </div>
 
         <div style={{

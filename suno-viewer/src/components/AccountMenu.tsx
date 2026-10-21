@@ -34,8 +34,12 @@ export default function AccountMenu() {
     } catch (error) {
       const code = (error as { code?: string })?.code || ''
       setNotice(code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'
-        ? 'Account chooser closed. You are signed out; choose Continue with Google to sign back in.'
-        : `${failure}: ${(error as Error)?.message || error}`)
+        ? 'Account chooser closed. You are still signed in as before.'
+        : code === 'auth/unauthorized-domain'
+          ? 'This site address is not yet allowed for Google sign-in. Use music.aeonimus.info/vault or ask the admin to authorize it.'
+          : code === 'auth/popup-blocked'
+            ? 'The browser blocked the sign-in popup. Allow popups for this site and try again.'
+            : `${failure}: ${(error as Error)?.message || error}`)
     } finally {
       setWorking(false)
     }

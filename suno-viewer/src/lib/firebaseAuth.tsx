@@ -331,13 +331,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await signOut(firebaseAuth)
       },
       switchAccount: async () => {
-        // Drop the current Firebase session first so the Vault cannot silently
-        // reuse it, then force Google's account chooser.
-        clearVaultSessionPreference()
-        await signOut(firebaseAuth)
+        // Open Google's account chooser synchronously inside the click so the
+        // browser does not block the popup (awaiting signOut first loses the
+        // user gesture). A successful popup replaces the current Firebase user;
+        // if the chooser is cancelled the current session is kept.
         const provider = new GoogleAuthProvider()
         provider.setCustomParameters({ prompt: 'select_account' })
         const result = await signInWithPopup(firebaseAuth, provider)
+        clearVaultSessionPreference()
         const preference = saveVaultSessionPreference(result.user.uid, sessionDurationHours)
         setSessionDurationHoursState(preference.durationHours)
       },

@@ -110,6 +110,7 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>
   sendMagicLink: (email: string) => Promise<void>
   signOutUser: () => Promise<void>
+  switchAccount: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -328,6 +329,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signOutUser: async () => {
         clearVaultSessionPreference()
         await signOut(firebaseAuth)
+      },
+      switchAccount: async () => {
+        // Drop the current Firebase session first so the Vault cannot silently
+        // reuse it, then force Google's account chooser.
+        clearVaultSessionPreference()
+        await signOut(firebaseAuth)
+        const provider = new GoogleAuthProvider()
+        provider.setCustomParameters({ prompt: 'select_account' })
+        const result = await signInWithPopup(firebaseAuth, provider)
+        const preference = saveVaultSessionPreference(result.user.uid, sessionDurationHours)
+        setSessionDurationHoursState(preference.durationHours)
       },
     }),
     [clientReady, firebaseUser, token, session, loadingSession, sessionError, sessionDurationHours]

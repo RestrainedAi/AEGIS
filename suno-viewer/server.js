@@ -12,7 +12,7 @@ const { applicationDefault, getApps, initializeApp: initializeFirebaseApp } = re
 const { getAuth } = require("firebase-admin/auth");
 const branding = require("./branding.config.json");
 const tierCatalogConfig = require("./shared/tierCatalog.json");
-const { summarizeExportFreshness } = require("./freshness-utils");
+const { summarizeExportFreshness, pickNewestByCreatedAt } = require("./freshness-utils");
 const {
   DEFAULT_CATALOG_EXPORT_TTL_MS,
   buildCatalogExportBaseFileName,
@@ -3467,24 +3467,21 @@ async function listActiveHarvestSources(accessToken) {
 
 async function loadLatestSongForSource(sourceId, accessToken) {
   if (!sourceId) return null;
-  const results = await fsRunQuery(
-    {
-      structuredQuery: {
-        from: [{ collectionId: SONG_COLLECTION }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "sourceId" },
-            op: "EQUAL",
-            value: { stringValue: sourceId },
-          },
-        },
-        orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
-        limit: 1,
-      },
-    },
-    accessToken
+  let results;
+  try {
+    results = await queryLatestSongsForSource(sourceId, "createdAt", 1, accessToken);
+  } catch (error) {
+    // sunoSongs has a (sourceId, importedAt) composite index but not
+    // (sourceId, createdAt). Without it Firestore returns FAILED_PRECONDITION,
+    // which used to 500 /api/vault/freshness and /api/admin/overview.
+    // Fall back to the indexed field and pick the newest createdAt in memory.
+    console.warn(`[freshness] createdAt query failed for ${sourceId}; falling back to importedAt: ${error?.message || error}`);
+    results = await queryLatestSongsForSource(sourceId, "importedAt", 50, accessToken);
+  }
+  const doc = pickNewestByCreatedAt(
+    results.filter((row) => row.document).map((row) => row.document),
+    (candidate) => fsTimestamp(candidate, "createdAt")
   );
-  const doc = results.find((row) => row.document)?.document;
   if (!doc) return null;
   return {
     songKey: fsString(doc, "songKey"),
@@ -3499,6 +3496,26 @@ async function loadLatestSongForSource(sourceId, accessToken) {
   };
 }
 
+async function queryLatestSongsForSource(sourceId, orderField, limit, accessToken) {
+  return fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: SONG_COLLECTION }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "sourceId" },
+            op: "EQUAL",
+            value: { stringValue: sourceId },
+          },
+        },
+        orderBy: [{ field: { fieldPath: orderField }, direction: "DESCENDING" }],
+        limit,
+      },
+    },
+    accessToken
+  );
+}
+
 async function loadLatestSourceSnapshot(accessToken) {
   const sourceDocs = await listActiveHarvestSources(accessToken);
   const accounts = [];
@@ -3509,7 +3526,15 @@ async function loadLatestSourceSnapshot(accessToken) {
       fsString(sourceDoc, "accountLabel") ||
       canonicalAccountLabel(handle) ||
       handle;
-    const latest = await loadLatestSongForSource(sourceId, accessToken);
+    let latest = null;
+    let latestError = "";
+    try {
+      latest = await loadLatestSongForSource(sourceId, accessToken);
+    } catch (error) {
+      // One bad source must not take the whole freshness/overview endpoint down.
+      latestError = String(error?.message || error);
+      console.error(`[freshness] latest-song lookup failed for ${sourceId}: ${latestError}`);
+    }
     const ingestionMode = fsString(sourceDoc, "ingestionMode") || "public_profile";
     const authorityStatus = fsString(sourceDoc, "authorityStatus") || "partial_source";
     const isAuthoritative =
@@ -3524,6 +3549,7 @@ async function loadLatestSourceSnapshot(accessToken) {
       authorityStatus,
       isAuthoritative,
       lastSourceError: fsString(sourceDoc, "lastSourceError"),
+      ...(latestError ? { latestLookupError: latestError } : {}),
     });
   }
 
@@ -4348,6 +4374,7 @@ app.get("/api/vault/freshness", async (req, res) => {
       catalogHealth,
     });
   } catch (error) {
+    console.error(`[freshness] /api/vault/freshness failed: ${error?.stack || error}`);
     return res.status(500).json({
       ok: false,
       error: `vault-freshness failed: ${error?.message || error}`,

@@ -154,6 +154,22 @@ function summarizeExportFreshness({
   };
 }
 
+function pickNewestByCreatedAt(docs = [], getCreatedAt = (doc) => doc?.createdAt) {
+  let best = null;
+  let bestMs = -Infinity;
+  for (const doc of docs || []) {
+    if (!doc) continue;
+    const ms = parseIsoTimestamp(getCreatedAt(doc));
+    const score = ms == null ? -Infinity : ms;
+    if (best === null || score > bestMs) {
+      best = doc;
+      bestMs = score;
+    }
+  }
+  return best;
+}
+
 module.exports = {
   summarizeExportFreshness,
+  pickNewestByCreatedAt,
 };

@@ -196,6 +196,60 @@ class ProcessClipFallback(unittest.TestCase):
         self.assertNotIn("audio_recovery", res)
 
 
+
+class StubAudioCountsAsMissing(ProcessClipFallback):
+    """Suno now serves a ~0.06 s stub instead of a 403: it must be treated as missing audio."""
+
+    def test_stub_bytes_rejected_before_upload_and_video_fallback_runs(self):
+        from audio_integrity import InvalidAudio
+        uploads = []
+
+        def stub_validate(path, expected_seconds=None):
+            raise InvalidAudio("audio is a stub or too short: 0.061s")
+
+        def fake_run(cmd, *a, **k):
+            uploads.append(cmd)
+            raise AssertionError("no gsutil call may happen for a rejected stub")
+
+        self.native = {"audio_bytes": b"\xff\xfb" * 40, "audio_ext": "mp3"}
+        with patch.object(self.dm, "validate_audio", stub_validate), \
+             patch.object(self.dm.subprocess, "run", fake_run):
+            res = self.run_clip(duration=200)
+        self.assertEqual(uploads, [])
+        self.assertEqual(self.derive_calls, [self.dm.gcs_path("nessihenize", "abc", "mp4")])
+        self.assertTrue(res["audio"])
+        self.assertEqual(res["audio_ext"], "mp3")
+        self.assertEqual(res["errors"], [])
+
+    def test_stored_stub_native_file_is_not_accepted_and_is_not_overwritten(self):
+        stub_uri = self.dm.gcs_path("nessihenize", "abc", "mp3")
+        # Object exists in GCS but fails byte validation (stub).
+        with patch.object(self.dm, "gs_exists", lambda uri: uri in self.store or uri == stub_uri):
+            res = self.run_clip()
+        self.assertEqual(self.derive_calls, [self.dm.gcs_path("nessihenize", "abc", "mp4")])
+        self.assertTrue(res["audio"])
+        self.assertIn("audio_recovery", res)
+
+    def test_real_validator_rejects_short_stub(self):
+        import audio_integrity as ai
+        from audio_integrity import InvalidAudio
+        import json as _json
+
+        class P:
+            def __init__(self, rc, out):
+                self.returncode, self.stdout = rc, out
+
+        def fake_run(cmd, *a, **k):
+            if "-show_entries" in cmd:
+                return P(0, _json.dumps({"streams": [{"codec_type": "audio"}]}))
+            return P(0, "out_time_us=61000\nprogress=end\n")
+
+        with patch.object(ai.shutil, "which", lambda n: "/usr/bin/" + n), \
+             patch.object(ai.subprocess, "run", fake_run):
+            with self.assertRaises(InvalidAudio) as ctx:
+                ai.validate_audio("stub.mp3", 200)
+        self.assertIn("stub or too short", str(ctx.exception))
+
 class ProcessAllWiring(unittest.TestCase):
     def test_native_after_recovery_records_version_before_upsert(self):
         import download_media_gcs as dm

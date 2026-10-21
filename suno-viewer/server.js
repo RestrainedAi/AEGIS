@@ -24,7 +24,15 @@ const { artifactExists: artifactExistsWithFallback, buildCustomerManifestRow, ha
 const { normalizeStorageObjectReference } = require("./storage-object-reference");
 
 const app = express();
-require('./local-mirror-token.cjs').installLocalMirrorTokenRoute(app, { getAccessToken });
+app.disable("x-powered-by");
+// S4: token routes still used by the local receiver (local-mirror) and maintenance tooling.
+// Bearer-hash protected, rate limited, audit logged. Harvest-test and maintenance build routes removed.
+{
+  const { createRateLimiter } = require("./token-hash-auth.cjs");
+  app.use(["/api/local-mirror/token", "/api/maintenance/token"], createRateLimiter({ windowMs: 60000, max: 20 }));
+}
+require("./local-mirror-token.cjs").installLocalMirrorTokenRoute(app, { getAccessToken });
+require("./maintenance-token.cjs").installMaintenanceTokenRoute(app, { getAccessToken });
 const storage = new Storage();
 app.use(express.json());
 
@@ -88,7 +96,7 @@ const LEGACY_WORKSPACE_ID = process.env.LEGACY_WORKSPACE_ID || branding.legacy.w
 const LEGACY_WORKSPACE_NAME = process.env.LEGACY_WORKSPACE_NAME || branding.productNames.legacyWorkspace;
 const INITIAL_APPROVED_EMAILS = String(
   process.env.INITIAL_APPROVED_EMAILS ||
-    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com,aegis@aeonimus.ai"
+    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com,aegis@aeonimus.ai,software@blahnikdigitaldesigns.com"
 )
   .split(",")
   .map((value) => value.trim().toLowerCase())
@@ -3036,6 +3044,9 @@ function pickActiveWorkspace(workspaces, preferredWorkspaceId, userDoc) {
   return workspaces[0];
 }
 
+const authTrust = require("./auth-trust");
+const ALLOWED_SIGN_IN_PROVIDERS = authTrust.allowedProviders(process.env.ALLOWED_SIGN_IN_PROVIDERS);
+
 async function resolveRequestContextInner(req, accessToken, viewAsSubject = null) {
   const token = viewAsSubject ? "view-as" : parseBearerToken(req);
   const preferredWorkspaceId =
@@ -3061,6 +3072,10 @@ async function resolveRequestContextInner(req, accessToken, viewAsSubject = null
   let decodedToken = null;
   try {
     decodedToken = viewAsSubject || (await firebaseAuth.verifyIdToken(token));
+    // S3: only verified Google (or explicitly allowed) sign-ins count as authenticated.
+    if (!viewAsSubject && !authTrust.isTrustedIdentity(decodedToken, ALLOWED_SIGN_IN_PROVIDERS)) {
+      throw new Error("untrusted sign-in provider or unverified email");
+    }
   } catch (_error) {
     return {
       authEnabled: true,
@@ -3091,16 +3106,16 @@ async function resolveRequestContextInner(req, accessToken, viewAsSubject = null
     console.warn("[auth-session] failed to refresh user doc:", error?.message || error);
   }
 
-  const bootstrapApproved = !viewAsSubject && (
-    isBootstrapApprovedEmail(decodedToken.email) ||
-    isBootstrapApprovedEmail(fsString(refreshedUserDoc || userDoc, "email")));
+  // S3: bootstrap emails come only from the verified token, never from the user-editable profile.
+  const verifiedEmail = viewAsSubject ? "" : authTrust.trustedEmail(decodedToken, ALLOWED_SIGN_IN_PROVIDERS);
+  const bootstrapApproved = !viewAsSubject && isBootstrapApprovedEmail(verifiedEmail);
 
   let adminDoc = null;
   if (!viewAsSubject) try {
     adminDoc = await findAdminDocForIdentity(
       {
         uid: decodedToken.uid,
-        email: decodedToken.email || fsString(refreshedUserDoc || userDoc, "email"),
+        email: verifiedEmail,
       },
       accessToken
     );
@@ -3123,10 +3138,13 @@ async function resolveRequestContextInner(req, accessToken, viewAsSubject = null
   }
 
   const accessRequest = buildAccessRequest(accessRequestDoc);
-  const platformAdmin =
-    fsBool(adminDoc, "isActive") ||
-    fsBool(adminDoc, "is_active") ||
-    bootstrapApproved;
+  const platformAdmin = !viewAsSubject && authTrust.isPlatformAdminIdentity({
+    decoded: decodedToken,
+    providers: ALLOWED_SIGN_IN_PROVIDERS,
+    adminDoc,
+    bootstrapEmails: approvedEmailSet(),
+    fsBool,
+  });
   const betaAccess = buildBetaAccessState(refreshedUserDoc || userDoc);
   const betaExpired = !platformAdmin && betaAccess?.status === "expired";
   const effectiveWorkspaces = betaExpired ? [] : workspaces;
@@ -3193,6 +3211,7 @@ async function verifyMasterAdminRequest(req) {
   if (!token || !firebaseAuth) return null;
   try {
     const decoded = await firebaseAuth.verifyIdToken(token);
+    if (!authTrust.isTrustedIdentity(decoded, ALLOWED_SIGN_IN_PROVIDERS)) return null;
     return adminAccess.hasRole(decoded, "master_admin") ? decoded : null;
   } catch (_e) {
     return null;

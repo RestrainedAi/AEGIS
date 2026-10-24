@@ -168,6 +168,41 @@ def preserve_audio_recovery(existing, incoming):
     incoming["gcs"]["audio"] = True
 
 
+
+MEDIA_ASSETS = (("audio", "audioUrl"), ("video", "videoUrl"), ("thumb", "thumbUrl"))
+
+
+def media_change_version(existing: dict, latest_version: dict, payload: dict, at: str, run_id: str):
+    """Pure: when a harvest replaces stored media on an already-versioned song, return the NEW
+    version doc (n+1) describing the new media; the old version is never touched. Returns None
+    when nothing that was already stored changes (first upload of a missing asset included only
+    if the song is versioned and the head URL actually changes)."""
+    if not existing or not existing.get("currentVersion"):
+        return None
+    old_media = existing.get("media") or {}
+    new_media = payload.get("media") or {}
+    changed = [kind for kind, key in MEDIA_ASSETS
+               if new_media.get(key) and new_media.get(key) != old_media.get(key)]
+    if not changed:
+        return None
+    n_prev = int(existing["currentVersion"])
+    latest = latest_version or {}
+    assets = dict(latest.get("assets") or {})
+    for kind, key in MEDIA_ASSETS:
+        if kind in changed:
+            entry = {"gcs": new_media[key], "status": "ok"}
+            if kind == "audio" and new_media.get("audioRecovery"):
+                rec = new_media["audioRecovery"]
+                entry.update({"derived": True, "sha256": rec.get("derivedSha256"), "recovery": rec})
+            assets[kind] = entry
+    return {
+        "n": n_prev + 1, "capturedAt": at, "runId": run_id, "changedFields": changed,
+        "metadata": latest.get("metadata") or {}, "metadataSha256": latest.get("metadataSha256", ""),
+        "source": latest.get("source") or {}, "assets": assets,
+        "supersedes": {"version": n_prev,
+                       "previous": {key: old_media.get(key) for kind, key in MEDIA_ASSETS if kind in changed}},
+    }
+
 # ── Core upsert function ──────────────────────────────────────────────────────
 def upsert_song_after_download(
     clip_id:        str,
@@ -355,6 +390,16 @@ def upsert_song_after_download(
             import copy
             payload = copy.deepcopy(doc_data)
             preserve_audio_recovery(existing or {}, payload)
+            # Replacing stored media is a NEW version (create-only); the head is never edited
+            # in place without one.
+            n_prev = int((existing or {}).get("currentVersion") or 0)
+            prev = (doc_ref.collection("versions").document(str(n_prev)).get(transaction=transaction)
+                    if n_prev else None)
+            version = media_change_version(existing or {}, prev.to_dict() if prev and prev.exists else {},
+                                           payload, now_iso, f"harvest-{now_iso[:19]}")
+            if version:
+                transaction.create(doc_ref.collection("versions").document(str(version["n"])), version)
+                payload["currentVersion"] = version["n"]
             transaction.set(doc_ref, payload, merge=True)
 
         write_preserving_recovery(db.transaction())

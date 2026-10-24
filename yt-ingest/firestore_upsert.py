@@ -203,6 +203,23 @@ def media_change_version(existing: dict, latest_version: dict, payload: dict, at
                        "previous": {key: old_media.get(key) for kind, key in MEDIA_ASSETS if kind in changed}},
     }
 
+def initial_version(payload: dict, at: str, run_id: str):
+    """Pure: versions/1 for a song the harvest stores for the first time (no currentVersion yet).
+    Returns None when the payload has no stored media to describe."""
+    media = payload.get("media") or {}
+    assets = {}
+    for kind, key in MEDIA_ASSETS:
+        if media.get(key):
+            entry = {"gcs": media[key], "status": "ok"}
+            if kind == "audio" and media.get("audioRecovery"):
+                rec = media["audioRecovery"]
+                entry.update({"derived": True, "sha256": rec.get("derivedSha256"), "recovery": rec})
+            assets[kind] = entry
+    if not assets:
+        return None
+    return {"n": 1, "capturedAt": at, "runId": run_id, "changedFields": ["initial"],
+            "metadata": {}, "source": {}, "assets": assets, "createdBy": "harvest-first-store"}
+
 # ── Core upsert function ──────────────────────────────────────────────────────
 def upsert_song_after_download(
     clip_id:        str,
@@ -397,6 +414,12 @@ def upsert_song_after_download(
                     if n_prev else None)
             version = media_change_version(existing or {}, prev.to_dict() if prev and prev.exists else {},
                                            payload, now_iso, f"harvest-{now_iso[:19]}")
+            if not version and not n_prev:
+                # First store (or a song stored before versioning reached the harvest): versions/1,
+                # only if no versions/1 exists already (never overwrite or fail on an old one).
+                v1 = doc_ref.collection("versions").document("1").get(transaction=transaction)
+                if not v1.exists:
+                    version = initial_version(payload, now_iso, f"harvest-{now_iso[:19]}")
             if version:
                 transaction.create(doc_ref.collection("versions").document(str(version["n"])), version)
                 payload["currentVersion"] = version["n"]

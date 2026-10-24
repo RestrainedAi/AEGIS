@@ -16,12 +16,31 @@ def document():
     return {'media': {'audioUrl': R['derivedAudioUrl'], 'audioRecovery': copy.deepcopy(R)}}
 
 
+class _VersionRef:
+    def __init__(self, db, key): self.db, self.key = db, key
+    def get(self, transaction=None):
+        val = self.db.versions.get(self.key)
+        return types.SimpleNamespace(exists=val is not None, to_dict=lambda: copy.deepcopy(val))
+
+
+class _Versions:
+    def __init__(self, db): self.db = db
+    def document(self, key): return _VersionRef(self.db, str(key))
+
+
 class DB:
-    def __init__(self, values):
+    def __init__(self, values, versions=None):
         self.values, self.reads, self.writes = values, 0, []
+        self.versions, self.created = dict(versions or {}), []
     def collection(self, name):
+        if name == 'versions':
+            return _Versions(self)
         assert name == 'sunoSongs'
         return self
+    def create(self, ref, data):
+        assert isinstance(ref, _VersionRef) and ref.key not in self.versions, 'create-only'
+        self.versions[ref.key] = copy.deepcopy(data)
+        self.created.append((ref.key, copy.deepcopy(data)))
     def document(self, key): return self
     def transaction(self): return self
     def get(self, transaction):

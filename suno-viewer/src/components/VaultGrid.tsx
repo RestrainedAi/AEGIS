@@ -5,6 +5,7 @@ import AuthControls from './AuthControls'
 import { authFetch, useAuth } from '../lib/firebaseAuth'
 import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
+import { issueIdsForSong, issueTagsForSong, songHasIssues, type IssueTag } from '../lib/issue-tags'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
   vanessa_primary: ['vanessa_primary', 'unshakableechos2341', 'suno_unshakableechos2341'],
@@ -383,7 +384,9 @@ function useProtectedAssetUrl(sourceUrl?: string) {
 }
 
 const hasRenderableVaultIdentity = (song: SunoSong) =>
-  Boolean(String(song.title || '').trim()) && Boolean(String(song.createdAt || '').trim())
+  (Boolean(String(song.title || '').trim()) && Boolean(String(song.createdAt || '').trim())) ||
+  // Songs Suno deleted often lost their title and date; keep them listed (as Untitled).
+  (Boolean(song.songKey) && issueIdsForSong(song as unknown as { [key: string]: unknown }).includes('removed_from_suno'))
 
 const decodeEscapedMultiline = (value?: string) =>
   String(value || '')
@@ -1331,6 +1334,85 @@ function YtBadge({ state }: { state?: YouTubePublishState }) {
 }
 
 
+// ── Issue tags ────────────────────────────────────────────────────────────────
+const ISSUE_TONE_STYLES: Record<IssueTag['tone'], { color: string; background: string; border: string }> = {
+  danger: { color: '#ffb4b4', background: 'rgba(140, 50, 50, 0.28)', border: 'rgba(214, 112, 112, 0.45)' },
+  warn:   { color: '#ffd9a0', background: 'rgba(120, 82, 24, 0.26)', border: 'rgba(230, 170, 80, 0.40)' },
+  notice: { color: '#bfeaff', background: 'rgba(33, 70, 96, 0.30)', border: 'rgba(127, 232, 255, 0.32)' },
+  muted:  { color: '#aab3d6', background: 'rgba(40, 44, 70, 0.45)', border: 'rgba(110, 120, 170, 0.35)' },
+}
+
+function IssueTagChip({ tag, songKey }: { tag: IssueTag; songKey: string }) {
+  const [open, setOpen] = useState(false)
+  const tone = ISSUE_TONE_STYLES[tag.tone]
+  const bubbleId = `issue-${tag.id}-${songKey}`
+  return (
+    <span
+      data-issue-tag={tag.id}
+      style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 4px 3px 8px', borderRadius: 999, fontSize: 10, lineHeight: 1,
+        fontWeight: 600, letterSpacing: '.02em', whiteSpace: 'nowrap',
+        color: tone.color, background: tone.background, border: `1px solid ${tone.border}`,
+      }}>
+        {tag.label}
+        <button
+          type="button"
+          aria-label={`What does "${tag.label}" mean?`}
+          aria-describedby={bubbleId}
+          aria-expanded={open}
+          onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }}
+          style={{
+            width: 14, height: 14, padding: 0, borderRadius: '50%',
+            border: `1px solid ${tone.border}`, background: 'rgba(0,0,0,0.25)',
+            color: tone.color, fontSize: 9, fontWeight: 700, lineHeight: '12px',
+            fontStyle: 'italic', fontFamily: 'Georgia, serif', cursor: 'help',
+          }}
+        >
+          i
+        </button>
+      </span>
+      <span
+        id={bubbleId}
+        role="tooltip"
+        style={{
+          position: 'absolute', zIndex: 30, top: 'calc(100% + 6px)', left: 0,
+          width: 220, padding: '8px 10px', borderRadius: 8,
+          background: '#0d0f1a', border: `1px solid ${tone.border}`,
+          boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
+          color: '#dfe4ff', fontSize: 11, lineHeight: 1.45, fontWeight: 400, whiteSpace: 'normal',
+          visibility: open ? 'visible' : 'hidden', opacity: open ? 1 : 0, transition: 'opacity .12s',
+          pointerEvents: open ? 'auto' : 'none',
+        }}
+      >
+        <strong style={{ display: 'block', color: tone.color, marginBottom: 3 }}>{tag.label}</strong>
+        {tag.info}
+      </span>
+    </span>
+  )
+}
+
+function IssueTagRow({ song }: { song: SunoSong }) {
+  const tags = issueTagsForSong(song as unknown as { [key: string]: unknown })
+  if (!tags.length) return null
+  return (
+    <div
+      data-testid="issue-tags"
+      aria-label="Song issues"
+      style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, minHeight: 20 }}
+    >
+      {tags.map(tag => <IssueTagChip key={tag.id} tag={tag} songKey={song.songKey} />)}
+    </div>
+  )
+}
+
 // ── SongCard ──────────────────────────────────────────────────────────────────
 function SongCard({
   song,
@@ -1516,16 +1598,6 @@ function SongCard({
         }}>
           {fmtDur(song.duration)}
         </div>
-        {isRemoved && (
-          <div style={{
-            position: 'absolute', top: 6, left: 6,
-            background: 'rgba(140,50,50,.9)', borderRadius: 4,
-            padding: '2px 7px', fontSize: 10, color: '#ffaaaa',
-            fontWeight: 600, letterSpacing: '.3px',
-          }}>
-            REMOVED FROM SUNO
-          </div>
-        )}
       </div>
 
       {/* Meta */}
@@ -1543,6 +1615,7 @@ function SongCard({
         <div style={{ fontSize: 11, color: '#6666aa', marginBottom: 6 }}>
           {accountDisplay}
         </div>
+        <IssueTagRow song={song} />
         {searchMatch && (
           <div
             style={{
@@ -2562,6 +2635,7 @@ export default function VaultGrid() {
     typeof window === 'undefined' ? 1440 : window.innerWidth
   )
   const [hideRemoved, setHideRemoved] = useState(true)
+  const [issuesOnly, setIssuesOnly] = useState(false)
   const [ytStatus, setYtStatus] = useState<Record<string, YouTubePublishState>>({})
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [focusedSongKey, setFocusedSongKey] = useState<string | null>(null)
@@ -3749,6 +3823,7 @@ export default function VaultGrid() {
   const filtered = useMemo(() => {
     let out = songs.filter(hasRenderableVaultIdentity)
     if (hideRemoved) out = out.filter(s => s.status !== 'removed_from_suno')
+    if (issuesOnly) out = out.filter(s => songHasIssues(s as unknown as { [key: string]: unknown }))
     if (acct) out = out.filter(s => canonicalAccount(s) === acct)
     if (styleFilter.trim()) out = out.filter(song => matchesStyleFilter(song, styleFilter))
     if (lyricsFilter !== 'all') {
@@ -3773,13 +3848,13 @@ export default function VaultGrid() {
         if (bScore !== aScore) return bScore - aScore
       }
       if (sort === 'createdAt')
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || 0
       if (sort === 'views')    return parseInt(b.views || '0') - parseInt(a.views || '0')
       if (sort === 'likes')    return parseInt(b.likes || '0') - parseInt(a.likes || '0')
       if (sort === 'duration') return parseFloat(b.duration || '0') - parseFloat(a.duration || '0')
       return 0
     })
-  }, [songs, search, acct, styleFilter, sort, hideRemoved, lyricsFilter, publishFilter, searchMatchBySongKey, matchesStyleFilter])
+  }, [songs, search, acct, styleFilter, sort, hideRemoved, issuesOnly, lyricsFilter, publishFilter, searchMatchBySongKey, matchesStyleFilter])
 
   const total      = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paged      = filtered.slice((page - 1) * pageSize, page * pageSize)
@@ -3789,6 +3864,7 @@ export default function VaultGrid() {
     (acct ? 1 : 0) +
     (styleFilter.trim() ? 1 : 0) +
     (hideRemoved ? 1 : 0) +
+    (issuesOnly ? 1 : 0) +
     (lyricsFilter !== 'all' ? 1 : 0) +
     (publishFilter !== 'all' ? 1 : 0)
   const retrievalFilterChips = useMemo(() => {
@@ -3843,6 +3919,16 @@ export default function VaultGrid() {
         },
       })
     }
+    if (issuesOnly) {
+      chips.push({
+        key: 'issues',
+        label: 'Has issues',
+        clear: () => {
+          setIssuesOnly(false)
+          setPage(1)
+        },
+      })
+    }
     if (hideRemoved) {
       chips.push({
         key: 'removed',
@@ -3854,7 +3940,7 @@ export default function VaultGrid() {
       })
     }
     return chips
-  }, [search, acct, styleFilter, hideRemoved, lyricsFilter, publishFilter])
+  }, [search, acct, styleFilter, hideRemoved, issuesOnly, lyricsFilter, publishFilter])
   const clearRetrievalFilters = useCallback(() => {
     setSearch('')
     setAcct('')
@@ -3863,17 +3949,28 @@ export default function VaultGrid() {
     setPublishFilter('all')
     setSort('createdAt')
     setHideRemoved(true)
+    setIssuesOnly(false)
     setPage(1)
   }, [])
   const applyQuickView = useCallback((
-    preset: 'recent' | 'has_lyrics' | 'missing_lyrics' | 'publish_ready' | 'published'
+    preset: 'recent' | 'has_lyrics' | 'missing_lyrics' | 'publish_ready' | 'published' | 'has_issues'
   ) => {
+    setIssuesOnly(false)
     setSearch('')
     setAcct('')
     setStyleFilter('')
     setSort('createdAt')
     setHideRemoved(true)
     setPage(1)
+
+    if (preset === 'has_issues') {
+      // Removed-from-Suno songs are issues too, so show them.
+      setHideRemoved(false)
+      setIssuesOnly(true)
+      setLyricsFilter('all')
+      setPublishFilter('all')
+      return
+    }
 
     if (preset === 'recent') {
       setLyricsFilter('all')
@@ -5070,11 +5167,12 @@ export default function VaultGrid() {
                 { key: 'has_lyrics', label: 'Has lyrics' },
                 { key: 'missing_lyrics', label: 'Missing lyrics' },
                 { key: 'published', label: 'Published' },
+                { key: 'has_issues', label: 'Has issues' },
               ].map(preset => (
                 <button
                   key={preset.key}
                   type="button"
-                  onClick={() => applyQuickView(preset.key as 'recent' | 'has_lyrics' | 'missing_lyrics' | 'publish_ready' | 'published')}
+                  onClick={() => applyQuickView(preset.key as 'recent' | 'has_lyrics' | 'missing_lyrics' | 'publish_ready' | 'published' | 'has_issues')}
                   style={{
                     background: '#10131a',
                     border: '1px solid rgba(127,232,255,0.12)',

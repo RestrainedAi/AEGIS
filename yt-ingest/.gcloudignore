@@ -16,6 +16,7 @@ __pycache__/
 !fixtures/
 !fixtures/suno_export_contract_fixture.json
 !fixtures/post_harvest_audio_gaps.json
+!fixtures/suno_removed_clips.json
 daily_suno_job_manual_*
 gcs_upload.log
 harvest_run.log

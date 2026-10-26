@@ -75,6 +75,7 @@ FIELDNAMES = [
     "ytVideoId",
     "ytCanonicalUrl",
     "ytPublishedAt",
+    "mediaIssues",
 ]
 
 from account_labels import (
@@ -313,6 +314,7 @@ def doc_to_row(doc, run_ts):
         "ytVideoId": normalize_inline_text(flat.get("ytVideoId", "")),
         "ytCanonicalUrl": normalize_inline_text(flat.get("ytCanonicalUrl", "")),
         "ytPublishedAt": normalize_inline_text(flat.get("ytPublishedAt", "")),
+        "mediaIssues": normalize_inline_text(flat.get("mediaIssues", "")),
     }
 
 
@@ -404,9 +406,44 @@ MEDIA_PATH_COLUMNS = (
 )
 
 
+STUB_AUDIO_BYTES = 20_000  # Suno's silent stand-in is ~4.8 KB; real songs are MBs
+KNOWN_REMOVED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "suno_removed_clips.json")
+
+
+def load_known_removed(path=KNOWN_REMOVED_FILE):
+    """Song IDs verified as gone from Suno (404) that stay listed in the Vault."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return {str(item.get("songKey") or "") for item in json.load(fh).get("clips", [])} - {""}
+    except (OSError, ValueError):
+        return set()
+
+
+def media_issues_for_row(row, sizes, known_removed=frozenset()):
+    """Plain issue ids the Vault shows as tags: removed_from_suno, audio_from_video,
+    silent_placeholder, no_audio, no_video, no_thumb."""
+    issues = []
+    if row.get("status") == "removed_from_suno" or row.get("songKey") in known_removed:
+        issues.append("removed_from_suno")
+    if row.get("audio_asset_role") == "derived-from-video":
+        issues.append("audio_from_video")
+    else:
+        audio = str(row.get("gcs_mp3") or "")
+        if audio.startswith("gs://") and audio in sizes and int(sizes[audio] or 0) < STUB_AUDIO_BYTES:
+            issues.append("silent_placeholder")
+        elif not (row.get("gcs_latest_audio") or row.get("gcs_mp3")):
+            issues.append("no_audio")
+    if not (row.get("gcs_mp4") or row.get("gcs_latest_mp4")):
+        issues.append("no_video")
+    if not (row.get("gcs_thumb") or row.get("gcs_latest_thumb") or row.get("image_url")):
+        issues.append("no_thumb")
+    return ";".join(issues)
+
+
 def list_media_objects(token, bucket, prefix="suno/"):
-    """Return the set of gs:// URIs that really exist (non-empty) under the prefix."""
-    found = set()
+    """Return {gs:// URI: size} for non-empty objects under the prefix.
+    (A dict, so `uri in result` still works as an existence check.)"""
+    found = {}
     page_token = None
     while True:
         url = (f"https://storage.googleapis.com/storage/v1/b/{bucket}/o"
@@ -417,7 +454,7 @@ def list_media_objects(token, bucket, prefix="suno/"):
         data = json.loads(urllib.request.urlopen(req, timeout=60).read())
         for item in data.get("items", []):
             if int(item.get("size") or 0) > 0:
-                found.add(f"gs://{bucket}/{item['name']}")
+                found[f"gs://{bucket}/{item['name']}"] = int(item.get("size") or 0)
         page_token = data.get("nextPageToken")
         if not page_token:
             return found
@@ -468,6 +505,9 @@ def main():
         try:
             existing = list_media_objects(token, media_bucket)
             dropped = drop_missing_media_paths(rows, existing)
+            known_removed = load_known_removed()
+            for row in rows:
+                row["mediaIssues"] = media_issues_for_row(row, existing, known_removed)
             print(f"  Media check: {len(existing)} objects; blanked missing paths {dropped}")
         except Exception as exc:
             # Never block the catalog on the check itself; say so loudly.

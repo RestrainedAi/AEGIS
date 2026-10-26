@@ -13,6 +13,7 @@ Contract notes:
 
 import csv
 import json
+import os
 import socket
 import sys
 import time
@@ -396,6 +397,50 @@ def safe_preview_text(value, limit=50):
     return text.encode("ascii", "replace").decode("ascii")
 
 
+MEDIA_PATH_COLUMNS = (
+    ("gcs_mp3", "gcs_latest_audio"),
+    ("gcs_mp4", "gcs_latest_mp4"),
+    ("gcs_thumb", "gcs_latest_thumb"),
+)
+
+
+def list_media_objects(token, bucket, prefix="suno/"):
+    """Return the set of gs:// URIs that really exist (non-empty) under the prefix."""
+    found = set()
+    page_token = None
+    while True:
+        url = (f"https://storage.googleapis.com/storage/v1/b/{bucket}/o"
+               f"?prefix={urllib.parse.quote(prefix, safe='')}&fields=items(name,size),nextPageToken&maxResults=1000")
+        if page_token:
+            url += f"&pageToken={urllib.parse.quote(page_token, safe='')}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        data = json.loads(urllib.request.urlopen(req, timeout=60).read())
+        for item in data.get("items", []):
+            if int(item.get("size") or 0) > 0:
+                found.add(f"gs://{bucket}/{item['name']}")
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            return found
+
+
+def drop_missing_media_paths(rows, existing):
+    """Blank gs:// media paths whose object does not exist, so the catalog
+    never advertises an mp3/mp4/thumb that is not in the bucket."""
+    dropped = {column: 0 for column, _ in MEDIA_PATH_COLUMNS}
+    for row in rows:
+        for column, latest in MEDIA_PATH_COLUMNS:
+            for key in (column, latest):
+                value = str(row.get(key) or "")
+                if value.startswith("gs://") and value not in existing:
+                    row[key] = ""
+                    if key == column:
+                        dropped[column] += 1
+        audio = str(row.get("audio_url") or "")
+        if audio.startswith("gs://") and audio not in existing:
+            row["audio_url"] = row.get("gcs_latest_audio") or row.get("gcs_mp3") or ""
+    return dropped
+
+
 def build_rows(docs, run_ts):
     rows = [doc_to_row(doc, run_ts) for doc in docs]
     return sorted(rows, key=lambda row: row.get("createdAt", ""), reverse=True)
@@ -418,6 +463,15 @@ def main():
     print(f"Total docs: {len(docs)}")
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = build_rows(docs, run_ts)
+    if os.environ.get("CATALOG_VERIFY_MEDIA", "true").strip().lower() not in {"0", "false", "no", "off"}:
+        media_bucket = os.environ.get("SUNO_MEDIA_BUCKET", "gs://aeonimus-suno-media").replace("gs://", "").strip("/")
+        try:
+            existing = list_media_objects(token, media_bucket)
+            dropped = drop_missing_media_paths(rows, existing)
+            print(f"  Media check: {len(existing)} objects; blanked missing paths {dropped}")
+        except Exception as exc:
+            # Never block the catalog on the check itself; say so loudly.
+            print(f"[WARN] Media existence check skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
     raw_label_rows = [
         row for row in rows
         if row.get("account_label") in HANDLE_ALIAS_MAP

@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import re
 import subprocess
 import time
@@ -259,15 +260,35 @@ if __name__ == "__main__":
     main()
 
 
-def fetch_profile_clip_ids(handle: str) -> list:
-    """Fetch all clip IDs for a Suno handle without mistaking an API error for no songs."""
+PROFILE_RATE_LIMIT_RETRIES = int(os.environ.get("PROFILE_RATE_LIMIT_RETRIES", "5") or 5)
+PROFILE_PAGE_PAUSE_SECONDS = float(os.environ.get("PROFILE_PAGE_PAUSE_SECONDS", "1.5") or 1.5)
+
+
+def fetch_profile_clip_ids(handle: str, sleep=None) -> list:
+    """Fetch all clip IDs for a Suno handle without mistaking an API error for no songs.
+
+    Suno throttles long profiles ("Too many requests"); pages are paced and a
+    throttled page is retried with exponential backoff before giving up.
+    """
+    from harvest_resilience import backoff_seconds, is_rate_limited
+    sleep = sleep or time.sleep
     base = f"https://studio-api.prod.suno.com/api/profiles/{handle}"
     page = 1
     all_ids = []
     seen = set()
     while True:
         url = f"{base}?page={page}&playlists_sort_by=created_at&clips_sort_by=created_at"
+        if page > 1 and PROFILE_PAGE_PAUSE_SECONDS > 0:
+            sleep(PROFILE_PAGE_PAUSE_SECONDS)
         data = curl_json(url)
+        attempt = 0
+        while is_rate_limited(data) and attempt < PROFILE_RATE_LIMIT_RETRIES:
+            attempt += 1
+            wait = backoff_seconds(attempt)
+            print(f"  [BACKOFF] {handle}: Suno said too many requests on page {page}; "
+                  f"waiting {wait:.0f}s (retry {attempt}/{PROFILE_RATE_LIMIT_RETRIES})")
+            sleep(wait)
+            data = curl_json(url)
         if not data:
             raise SunoProfileFetchError(f"{handle}: profile request failed on page {page}")
         if not isinstance(data, dict):

@@ -39,6 +39,8 @@ RUN playwright install chromium
 
 COPY build_manifest_from_studio_api.py .
 COPY download_media_gcs.py .
+COPY harvest_resilience.py .
+COPY suno_wav.py .
 COPY derived_audio.py .
 COPY audio_gap_alerts.py .
 COPY audio_integrity.py .

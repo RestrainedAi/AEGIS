@@ -32,6 +32,8 @@ from firestore_upsert import (upsert_song_after_download, update_song_metadata_o
                               record_native_retry, record_native_audio_version)
 import derived_audio
 from audio_integrity import InvalidAudio, expected_duration, validate_audio, validate_video
+from harvest_resilience import ChronicFailureLedger, is_placeholder_audio_url
+import suno_wav
 import urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
@@ -49,6 +51,13 @@ CURL_BIN     = shutil.which("curl") or shutil.which("curl.exe") or "curl"
 INTERCEPT_TIMEOUT_MS = 30_000
 # Retry attempts per clip before giving up
 MAX_RETRIES = 3
+# Chromium launch attempts inside one interception (Cloud Run sometimes kills
+# the first browser with "Target page, context or browser has been closed").
+BROWSER_LAUNCH_ATTEMPTS = 2
+# Ledger of clips that keep failing; repeat failures become warnings.
+CHRONIC_LEDGER = os.environ.get(
+    "CHRONIC_FAILURE_LEDGER",
+    "gs://aeonimus-workspaces/exports/suno/state/chronic_media_failures.json")
 # Historic video-only repairs are optional work. Keep the daily catalog path
 # responsive by deferring those rows to the dedicated repair run unless an
 # operator explicitly enables them.
@@ -158,7 +167,8 @@ def upload_validated_file(tmp_path, gs_uri, expected_seconds=None):
     return stored_validator(gs_uri, expected_seconds) if media else True
 
 
-def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None, expected_seconds=None) -> bool:
+def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None, expected_seconds=None,
+                  rejects: list = None) -> bool:
     """
     Download to a temporary file, validate media, and upload without clobbering.
     Audio/video success requires validation of the actual stored object as well.
@@ -209,6 +219,12 @@ def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None, expected_se
     except subprocess.TimeoutExpired:
         print(f"    [TIMEOUT] stream_to_gcs timed out for {gs_uri}", file=sys.stderr)
         return False
+    except InvalidAudio as exc:
+        # A stub/silent file is Suno saying "not ready": never uploaded, retried next night.
+        print(f"    [NOT_READY] {gs_uri.split('/')[-1]}: {exc} (not uploaded)", file=sys.stderr)
+        if rejects is not None:
+            rejects.append(str(exc))
+        return False
     except Exception as exc:
         print(f"    [ERROR] stream_to_gcs temp-file path failed for {gs_uri}: {exc}", file=sys.stderr)
         return False
@@ -220,7 +236,7 @@ def stream_to_gcs(url: str, gs_uri: str, extra_headers: dict = None, expected_se
                 pass
  
  
-def stream_bytes_to_gcs(data: bytes, gs_uri: str, expected_seconds=None) -> bool:
+def stream_bytes_to_gcs(data: bytes, gs_uri: str, expected_seconds=None, rejects: list = None) -> bool:
     """Validate intercepted audio/video bytes before upload on every platform."""
     tmp_path = None
     try:
@@ -232,6 +248,8 @@ def stream_bytes_to_gcs(data: bytes, gs_uri: str, expected_seconds=None) -> bool
         return upload_validated_file(tmp_path, gs_uri, expected_seconds)
     except (InvalidAudio, OSError, subprocess.TimeoutExpired) as exc:
         print(f"    [MEDIA_INVALID_OR_UPLOAD_FAILED] {gs_uri}: {exc}", file=sys.stderr)
+        if isinstance(exc, InvalidAudio) and rejects is not None:
+            rejects.append(str(exc))
         return False
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -239,6 +257,28 @@ def stream_bytes_to_gcs(data: bytes, gs_uri: str, expected_seconds=None) -> bool
 
 
 # -- Playwright media interception --------------------------------------------
+BROWSER_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+]
+
+
+async def launch_browser(pw, attempts: int = None, pause: float = 3.0):
+    """Launch Chromium, retrying once more if the first launch dies."""
+    attempts = attempts or BROWSER_LAUNCH_ATTEMPTS
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await pw.chromium.launch(headless=True, args=BROWSER_ARGS)
+        except Exception as exc:
+            last = exc
+            print(f"    [WARN] Chromium launch {attempt}/{attempts} failed: {exc}", file=sys.stderr)
+            if attempt < attempts:
+                await asyncio.sleep(pause)
+    raise last
+
 async def intercept_clip_media(clip_id: str, handle: str) -> dict:
     """
     Launch headless Chromium via Playwright, navigate to the Suno song page,
@@ -258,19 +298,12 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
         "thumb_url": None,
         "thumb_bytes": None,
         "request_headers": {},
+        "placeholder_seen": False,
     }
     song_url = SUNO_SONG_URL.format(clip_id=clip_id)
  
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-            ]
-        )
+        browser = await launch_browser(pw)
         context = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -287,6 +320,9 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
         async def handle_request(request):
             url = request.url
             hdrs = dict(request.headers)
+            if is_placeholder_audio_url(url):
+                result["placeholder_seen"] = True
+                return
  
             # Audio: Suno streams mp3 or m4a from cdn.suno.com or similar
             if result["audio_url"] is None:
@@ -316,6 +352,9 @@ async def intercept_clip_media(clip_id: str, handle: str) -> dict:
         async def handle_response(response):
             url = response.url
             lower_url = url.lower()
+            if is_placeholder_audio_url(url):
+                result["placeholder_seen"] = True
+                return
             is_suno_media = "cdn" in lower_url or "suno" in lower_url
 
             if result["audio_bytes"] is None and is_suno_media and (
@@ -462,7 +501,8 @@ async def process_clip(row: dict) -> dict:
  
     duration = expected_duration(row)
     audio_ext = None
-    for ext, uri in (("mp3", audio_gs_mp3), ("m4a", audio_gs_m4a)):
+    audio_gs_wav = gcs_path(handle, clip_id, "wav")
+    for ext, uri in (("mp3", audio_gs_mp3), ("m4a", audio_gs_m4a), ("wav", audio_gs_wav)):
         if gs_exists(uri) and gs_audio_valid(uri, duration):
             audio_ext = ext
             break
@@ -503,11 +543,16 @@ async def process_clip(row: dict) -> dict:
     static_thumb = row.get("image_url", "")
  
     static_ok = False
+    not_ready = []  # evidence Suno served a placeholder/stub instead of the song
+    if need_audio and is_placeholder_audio_url(static_audio):
+        print(f"    [NOT_READY] manifest audio is a Suno placeholder; skipping static fetch")
+        not_ready.append("placeholder audio_url")
+        static_audio = ""
     if need_audio and static_audio:
         ext = "m4a" if static_audio.endswith(".m4a") else "mp3"
         target_gs = gcs_path(handle, clip_id, ext)
         print(f"    [TRY] Static audio ({ext}): {static_audio[:80]}...")
-        if stream_to_gcs(static_audio, target_gs, expected_seconds=duration):
+        if stream_to_gcs(static_audio, target_gs, expected_seconds=duration, rejects=not_ready):
             print(f"    [OK] audio -> {target_gs}")
             result["audio"] = True
             need_audio = False
@@ -534,12 +579,15 @@ async def process_clip(row: dict) -> dict:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 intercepted = await intercept_clip_media(clip_id, handle)
+                if intercepted.get("placeholder_seen"):
+                    not_ready.append("placeholder stream")
  
                 if need_audio and intercepted.get("audio_bytes"):
                     ext = intercepted.get("audio_ext", "m4a")
                     target_gs = gcs_path(handle, clip_id, ext)
                     print(f"    [TRY] Browser-captured audio ({ext})")
-                    if stream_bytes_to_gcs(intercepted["audio_bytes"], target_gs, expected_seconds=duration):
+                    if stream_bytes_to_gcs(intercepted["audio_bytes"], target_gs, expected_seconds=duration,
+                                           rejects=not_ready):
                         print(f"    [OK] audio bytes -> {target_gs}")
                         result["audio"] = True
                         result["audio_ext"] = ext
@@ -554,7 +602,8 @@ async def process_clip(row: dict) -> dict:
                         if k.lower() in ("referer", "accept", "user-agent", "origin")
                     }
                     print(f"    [TRY] Playwright audio URL ({ext}): {intercepted['audio_url'][:80]}...")
-                    if stream_to_gcs(intercepted["audio_url"], target_gs, safe_headers, expected_seconds=duration):
+                    if stream_to_gcs(intercepted["audio_url"], target_gs, safe_headers, expected_seconds=duration,
+                                     rejects=not_ready):
                         print(f"    [OK] audio -> {target_gs}")
                         result["audio"] = True
                         result["audio_ext"] = ext
@@ -594,6 +643,22 @@ async def process_clip(row: dict) -> dict:
                 if attempt < MAX_RETRIES:
                     time.sleep(2 ** attempt)
  
+    if need_audio and not retained and suno_wav.wav_enabled_for(handle):
+        # Owned songs: ask Suno to render the WAV with the account cookie.
+        wav_gs = gcs_path(handle, clip_id, "wav")
+        try:
+            wav_url = suno_wav.wav_url_for_clip(clip_id)
+            print(f"    [TRY] Suno WAV render (owned account)")
+            if stream_to_gcs(wav_url, wav_gs, expected_seconds=duration, rejects=not_ready):
+                print(f"    [OK] audio -> {wav_gs}")
+                result["audio"] = True
+                result["audio_ext"] = "wav"
+                need_audio = False
+        except suno_wav.WavUnavailable as exc:
+            print(f"    [INFO] WAV fallback unavailable: {exc}")
+        except Exception as exc:
+            print(f"    [WARN] WAV fallback error: {type(exc).__name__}", file=sys.stderr)
+
     if has_recovery and result["audio"] and result.get("audio_ext"):
         # Suno served the native file after a derived copy was in place: new version.
         result["native_after_recovery"] = True
@@ -623,7 +688,12 @@ async def process_clip(row: dict) -> dict:
             print(f"    [FAIL] no verified stored video to derive audio from", file=sys.stderr)
 
     # Log remaining failures
-    if need_audio:
+    if need_audio and not_ready:
+        msg = f"audio not ready on Suno for {clip_id} (placeholder/stub; retry next night)"
+        print(f"    [NOT_READY] {msg}")
+        result["errors"].append(msg)
+        result["not_ready"] = True
+    elif need_audio:
         msg = f"audio not captured for {clip_id}"
         print(f"    [FAIL] {msg}", file=sys.stderr)
         result["errors"].append(msg)
@@ -638,9 +708,20 @@ async def process_clip(row: dict) -> dict:
         result["thumb"] = False
         result["errors"].append(msg)
  
+    # Only "not ready" audio (nothing else wrong) is a warning, never a job failure.
+    result["not_ready_only"] = bool(result.get("not_ready")) and not need_video and not need_thumb
     return result
  
  
+def summarize_failures(results: list, ledger) -> tuple:
+    """Return (hard, warnings). Chronic and not-ready failures are warnings."""
+    if ledger is None:
+        hard = [r for r in results if r.get("errors") and not r.get("not_ready_only")]
+        warn = [r for r in results if r.get("errors") and r.get("not_ready_only")]
+        return hard, warn
+    return ledger.classify(results)
+
+
 # -- Main ---------------------------------------------------------------------
 def main():
     run_ts = datetime.now(timezone.utc).isoformat()
@@ -682,6 +763,10 @@ def main():
     ok_video  = sum(1 for r in results if r.get("video"))
     ok_thumb  = sum(1 for r in results if r.get("thumb"))
     errors    = [r for r in results if r.get("errors")]
+    ledger = ChronicFailureLedger(CHRONIC_LEDGER).load() if CHRONIC_LEDGER else None
+    hard, warnings = summarize_failures(results, ledger)
+    if ledger is not None:
+        ledger.save()
  
     end_ts = datetime.now(timezone.utc).isoformat()
     print(f"""
@@ -690,13 +775,19 @@ def main():
   Audio OK     : {ok_audio}/{len(rows)}
   Video OK     : {ok_video}/{len(rows)}
   Thumb OK     : {ok_thumb}/{len(rows)}
-  Hard errors  : {len(errors)}
+  Clips w/ errs: {len(errors)}
+  Hard errors  : {len(hard)}
+  Warnings     : {len(warnings)} (not ready on Suno, or chronic repeat failures)
 ==========================================
 """)
  
-    if errors:
+    if warnings:
+        print("Clips with warnings (retried next night, do not fail the job):")
+        for r in warnings:
+            print(f"  {r['clip_id']}: {'; '.join(r['errors'])}")
+    if hard:
         print("Clips with hard errors:")
-        for r in errors:
+        for r in hard:
             print(f"  {r['clip_id']}: {'; '.join(r['errors'])}")
         sys.exit(1)
     else:

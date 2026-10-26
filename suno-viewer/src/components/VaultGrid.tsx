@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, useMemo, useCallback, useRef, CSSPropert
 import { SunoSong, YouTubePublishState } from '../types'
 import AudioPlayer from './AudioPlayer'
 import AuthControls from './AuthControls'
+import AccountMenu from './AccountMenu'
 import { authFetch, useAuth } from '../lib/firebaseAuth'
 import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
@@ -2606,7 +2607,7 @@ function formatSessionDuration(durationHours: number) {
 }
 
 export default function VaultGrid() {
-  const { session, loadingSession, token, sessionDurationHours, setSessionDurationHours } = useAuth()
+  const { session, loadingSession, token, sessionDurationHours, setSessionDurationHours, firebaseUser } = useAuth()
   const initialViewMode = useMemo<'grid' | 'catalog'>(() => {
     const params = new URLSearchParams(window.location.search)
     return params.get('view') === 'catalog' ? 'catalog' : 'grid'
@@ -2614,9 +2615,8 @@ export default function VaultGrid() {
   const initialVaultSection = useMemo<VaultSection>(() => {
     const params = new URLSearchParams(window.location.search)
     const section = params.get('section')
-    return section === 'downloads' || section === 'security' || section === 'truth' || section === 'history'
-      ? section
-      : 'archives'
+    // security/truth/history have no real view yet; they fall back to archives.
+    return section === 'downloads' ? section : 'archives'
   }, [])
   const [songs, setSongs] = useState<SunoSong[]>([])
   const [loading, setLoading] = useState(true)
@@ -4097,6 +4097,27 @@ export default function VaultGrid() {
   const onSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value); setPage(1)
   }, [])
+  const clearSearch = useCallback(() => {
+    setSearch(''); setPage(1)
+  }, [])
+  // Search results (and the derived match highlights) belong to one signed-in
+  // user and one Suno account: reset the term on sign-out, account switch, or
+  // a change of the selected Suno account.
+  const signedInUid = firebaseUser?.uid || ''
+  const previousUidRef = useRef(signedInUid)
+  useEffect(() => {
+    if (previousUidRef.current !== signedInUid) {
+      previousUidRef.current = signedInUid
+      clearSearch()
+    }
+  }, [signedInUid, clearSearch])
+  const previousAcctRef = useRef(acct)
+  useEffect(() => {
+    if (previousAcctRef.current !== acct) {
+      previousAcctRef.current = acct
+      clearSearch()
+    }
+  }, [acct, clearSearch])
 
   const toggleSelected = useCallback((song: SunoSong) => {
     if (!downloadAccess.batchEnabled) return
@@ -4369,24 +4390,26 @@ export default function VaultGrid() {
               sundrop Vault
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
-              {['Archives', 'Catalog', 'Network'].map(label => (
+              {/* Network had no destination, so it is hidden instead of left dead. */}
+              {(['Archives', 'Catalog'] as const).map(label => {
+                const isActive = vaultSection === 'archives' && (label === 'Catalog' ? viewMode === 'catalog' : viewMode === 'grid')
+                return (
                 <button
                   key={label}
                   type="button"
+                  aria-current={isActive ? 'page' : undefined}
                   onClick={() => {
-                    if (label === 'Catalog') {
-                      setViewMode('catalog')
-                      setPage(1)
-                    } else if (label === 'Archives') {
-                      setViewMode('grid')
-                      setPage(1)
-                    }
+                    setVaultSection('archives')
+                    setViewMode(label === 'Catalog' ? 'catalog' : 'grid')
+                    setPage(1)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
                   }}
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    padding: 0,
-                    color: label === 'Catalog' ? '#81ecff' : '#7b8297',
+                    borderBottom: isActive ? '1px solid #81ecff' : '1px solid transparent',
+                    padding: '0 0 3px',
+                    color: isActive ? '#81ecff' : '#7b8297',
                     fontSize: 11,
                     letterSpacing: '.26em',
                     textTransform: 'uppercase',
@@ -4395,10 +4418,16 @@ export default function VaultGrid() {
                 >
                   {label}
                 </button>
-              ))}
+                )
+              })}
             </div>
           </div>
-          <div />
+          <AccountMenu />
+        </div>
+      )}
+      {!isDesktopVaultShell && session?.isAuthenticated && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px 0' }}>
+          <AccountMenu />
         </div>
       )}
 
@@ -4485,9 +4514,8 @@ export default function VaultGrid() {
                       detail: downloadHomeStatusLabel,
                     }]
                   : []),
-                { label: 'Security Nodes', active: vaultSection === 'security', action: () => setVaultSection('security') },
-                { label: 'Truth Stream', active: vaultSection === 'truth', action: () => setVaultSection('truth') },
-                { label: 'Vault History', active: vaultSection === 'history', action: () => setVaultSection('history') },
+                // Security Nodes, Truth Stream and Vault History have no real view yet,
+                // so they are hidden rather than shown as dead items.
               ].map(item => (
                 <button
                   key={item.label}
@@ -4539,52 +4567,7 @@ export default function VaultGrid() {
                 </button>
               ))}
             </div>
-            <div style={{ marginTop: 160, padding: '0 22px' }}>
-              <div style={{
-                color: '#5d6882',
-                fontSize: 9,
-                letterSpacing: '.22em',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-              }}>
-                System Integrity
-              </div>
-              <div style={{ height: 4, background: '#12161d', marginBottom: 12 }}>
-                <div style={{ width: '98%', height: '100%', background: '#81ecff' }} />
-              </div>
-              <button
-                type="button"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  background: 'transparent',
-                  border: '1px solid rgba(129,236,255,0.4)',
-                  color: '#c8f8ff',
-                  fontSize: 10,
-                  letterSpacing: '.24em',
-                  textTransform: 'uppercase',
-                  marginBottom: 10,
-                }}
-              >
-                Reinforce Perimeter
-              </button>
-              <button
-                type="button"
-                style={{
-                  width: '100%',
-                  padding: '14px 14px',
-                  background: '#81ecff',
-                  border: '1px solid rgba(129,236,255,0.5)',
-                  color: '#051217',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '.24em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Initialize New Asset
-              </button>
-            </div>
+            {/* System Integrity panel removed: its two buttons had no action. */}
           </aside>
         )}
 
@@ -4890,18 +4873,39 @@ export default function VaultGrid() {
             </div>
           </div>
         )}
+        <div style={{ position: 'relative', width: '100%' }}>
         <input
-          type="text" placeholder="Search title, account, tags, or lyrics…"
+          type="text" aria-label="Search the Vault"
+          onKeyDown={(event) => { if (event.key === 'Escape' && search) { event.preventDefault(); clearSearch() } }}
+          placeholder="Search title, account, tags, or lyrics…"
           value={search} onChange={onSearch}
           style={{
             ...selStyle,
             width: '100%',
             minWidth: 200,
+            paddingRight: 32,
+            boxSizing: 'border-box',
             outline: 'none',
             background: isDesktopVaultShell ? '#111111' : selStyle.background,
             border: isDesktopVaultShell ? '1px solid rgba(255,255,255,0.06)' : selStyle.border,
           }}
         />
+        {search && (
+          <button
+            type="button"
+            onClick={clearSearch}
+            aria-label="Clear search"
+            title="Clear search (Esc)"
+            style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'transparent', border: 'none', color: '#9fb0d0', fontSize: 16,
+              lineHeight: 1, padding: '4px 6px', cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        )}
+        </div>
         </div>
 
         <div style={{

@@ -38,6 +38,9 @@ void setPersistence(firebaseAuth, browserLocalPersistence)
 
 const emailLinkUrl = buildActiveCloudUrl('/vault')
 export const MAGIC_LINK_ENABLED = false
+/** Master Admin view-as session (sessionStorage only; cleared on Exit or expiry). */
+export const VIEW_AS_TOKEN_KEY = 'aegis.viewAs.token'
+export const VIEW_AS_SESSION_KEY = 'aegis.viewAs.session'
 export const DEFAULT_VAULT_SESSION_HOURS = 10 * 24
 export const MIN_VAULT_SESSION_HOURS = 72
 export const MAX_VAULT_SESSION_HOURS = 31 * 24
@@ -107,6 +110,7 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>
   sendMagicLink: (email: string) => Promise<void>
   signOutUser: () => Promise<void>
+  switchAccount: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -326,6 +330,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         clearVaultSessionPreference()
         await signOut(firebaseAuth)
       },
+      switchAccount: async () => {
+        // Open Google's account chooser synchronously inside the click so the
+        // browser does not block the popup (awaiting signOut first loses the
+        // user gesture). A successful popup replaces the current Firebase user;
+        // if the chooser is cancelled the current session is kept.
+        const provider = new GoogleAuthProvider()
+        provider.setCustomParameters({ prompt: 'select_account' })
+        const result = await signInWithPopup(firebaseAuth, provider)
+        clearVaultSessionPreference()
+        const preference = saveVaultSessionPreference(result.user.uid, sessionDurationHours)
+        setSessionDurationHoursState(preference.durationHours)
+      },
     }),
     [clientReady, firebaseUser, token, session, loadingSession, sessionError, sessionDurationHours]
   )
@@ -350,6 +366,10 @@ export async function authFetch(
   const activeToken = explicitToken ?? (await firebaseAuth.currentUser?.getIdToken()) ?? ''
   if (activeToken) {
     headers.set('Authorization', `Bearer ${activeToken}`)
+  }
+  const viewAsToken = typeof window !== 'undefined' ? window.sessionStorage.getItem(VIEW_AS_TOKEN_KEY) : null
+  if (viewAsToken && !headers.has('x-view-as-session')) {
+    headers.set('x-view-as-session', viewAsToken)
   }
   return fetch(input, {
     ...init,

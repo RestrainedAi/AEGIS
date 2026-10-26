@@ -12,7 +12,7 @@ const { applicationDefault, getApps, initializeApp: initializeFirebaseApp } = re
 const { getAuth } = require("firebase-admin/auth");
 const branding = require("./branding.config.json");
 const tierCatalogConfig = require("./shared/tierCatalog.json");
-const { summarizeExportFreshness } = require("./freshness-utils");
+const { summarizeExportFreshness, pickNewestByCreatedAt } = require("./freshness-utils");
 const {
   DEFAULT_CATALOG_EXPORT_TTL_MS,
   buildCatalogExportBaseFileName,
@@ -24,7 +24,15 @@ const { artifactExists: artifactExistsWithFallback, buildCustomerManifestRow, ha
 const { normalizeStorageObjectReference } = require("./storage-object-reference");
 
 const app = express();
-require('./local-mirror-token.cjs').installLocalMirrorTokenRoute(app, { getAccessToken });
+app.disable("x-powered-by");
+// S4: token routes still used by the local receiver (local-mirror) and maintenance tooling.
+// Bearer-hash protected, rate limited, audit logged. Harvest-test and maintenance build routes removed.
+{
+  const { createRateLimiter } = require("./token-hash-auth.cjs");
+  app.use(["/api/local-mirror/token", "/api/maintenance/token"], createRateLimiter({ windowMs: 60000, max: 20 }));
+}
+require("./local-mirror-token.cjs").installLocalMirrorTokenRoute(app, { getAccessToken });
+require("./maintenance-token.cjs").installMaintenanceTokenRoute(app, { getAccessToken });
 const storage = new Storage();
 app.use(express.json());
 
@@ -88,7 +96,7 @@ const LEGACY_WORKSPACE_ID = process.env.LEGACY_WORKSPACE_ID || branding.legacy.w
 const LEGACY_WORKSPACE_NAME = process.env.LEGACY_WORKSPACE_NAME || branding.productNames.legacyWorkspace;
 const INITIAL_APPROVED_EMAILS = String(
   process.env.INITIAL_APPROVED_EMAILS ||
-    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com,aegis@aeonimus.ai"
+    "blahnikdigitaldesigns@gmail.com,aeonimusai@gmail.com,aegis@aeonimus.ai,software@blahnikdigitaldesigns.com"
 )
   .split(",")
   .map((value) => value.trim().toLowerCase())
@@ -3036,8 +3044,11 @@ function pickActiveWorkspace(workspaces, preferredWorkspaceId, userDoc) {
   return workspaces[0];
 }
 
-async function resolveRequestContext(req, accessToken) {
-  const token = parseBearerToken(req);
+const authTrust = require("./auth-trust");
+const ALLOWED_SIGN_IN_PROVIDERS = authTrust.allowedProviders(process.env.ALLOWED_SIGN_IN_PROVIDERS);
+
+async function resolveRequestContextInner(req, accessToken, viewAsSubject = null) {
+  const token = viewAsSubject ? "view-as" : parseBearerToken(req);
   const preferredWorkspaceId =
     String(req.query.workspaceId || req.headers["x-workspace-id"] || "").trim();
 
@@ -3060,7 +3071,11 @@ async function resolveRequestContext(req, accessToken) {
 
   let decodedToken = null;
   try {
-    decodedToken = await firebaseAuth.verifyIdToken(token);
+    decodedToken = viewAsSubject || (await firebaseAuth.verifyIdToken(token));
+    // S3: only verified Google (or explicitly allowed) sign-ins count as authenticated.
+    if (!viewAsSubject && !authTrust.isTrustedIdentity(decodedToken, ALLOWED_SIGN_IN_PROVIDERS)) {
+      throw new Error("untrusted sign-in provider or unverified email");
+    }
   } catch (_error) {
     return {
       authEnabled: true,
@@ -3078,8 +3093,11 @@ async function resolveRequestContext(req, accessToken) {
       authInitError: firebaseInitError,
     };
   }
-  const userDoc = await ensureUserProfile(decodedToken, accessToken);
-  await ensureBootstrapWorkspaceForUser(decodedToken, accessToken);
+  // View-as sessions are read-only: never create/update the subject's profile or workspace.
+  const userDoc = viewAsSubject
+    ? await fsGetDocByPath(`users/${decodedToken.uid}`, accessToken).catch(() => null)
+    : await ensureUserProfile(decodedToken, accessToken);
+  if (!viewAsSubject) await ensureBootstrapWorkspaceForUser(decodedToken, accessToken);
 
   let refreshedUserDoc = null;
   try {
@@ -3088,16 +3106,16 @@ async function resolveRequestContext(req, accessToken) {
     console.warn("[auth-session] failed to refresh user doc:", error?.message || error);
   }
 
-  const bootstrapApproved =
-    isBootstrapApprovedEmail(decodedToken.email) ||
-    isBootstrapApprovedEmail(fsString(refreshedUserDoc || userDoc, "email"));
+  // S3: bootstrap emails come only from the verified token, never from the user-editable profile.
+  const verifiedEmail = viewAsSubject ? "" : authTrust.trustedEmail(decodedToken, ALLOWED_SIGN_IN_PROVIDERS);
+  const bootstrapApproved = !viewAsSubject && isBootstrapApprovedEmail(verifiedEmail);
 
   let adminDoc = null;
-  try {
+  if (!viewAsSubject) try {
     adminDoc = await findAdminDocForIdentity(
       {
         uid: decodedToken.uid,
-        email: decodedToken.email || fsString(refreshedUserDoc || userDoc, "email"),
+        email: verifiedEmail,
       },
       accessToken
     );
@@ -3120,10 +3138,13 @@ async function resolveRequestContext(req, accessToken) {
   }
 
   const accessRequest = buildAccessRequest(accessRequestDoc);
-  const platformAdmin =
-    fsBool(adminDoc, "isActive") ||
-    fsBool(adminDoc, "is_active") ||
-    bootstrapApproved;
+  const platformAdmin = !viewAsSubject && authTrust.isPlatformAdminIdentity({
+    decoded: decodedToken,
+    providers: ALLOWED_SIGN_IN_PROVIDERS,
+    adminDoc,
+    bootstrapEmails: approvedEmailSet(),
+    fsBool,
+  });
   const betaAccess = buildBetaAccessState(refreshedUserDoc || userDoc);
   const betaExpired = !platformAdmin && betaAccess?.status === "expired";
   const effectiveWorkspaces = betaExpired ? [] : workspaces;
@@ -3168,6 +3189,141 @@ async function resolveRequestContext(req, accessToken) {
     betaAccess,
     authInitError: firebaseInitError,
   };
+}
+
+// ---- Master Admin "view as user" (PLAN_4_5 step 5). Off unless MASTER_ADMIN_ENABLED=true. ----
+const adminAccess = require("./admin-access");
+const MASTER_ADMIN_ENABLED = String(process.env.MASTER_ADMIN_ENABLED || "").trim().toLowerCase() === "true";
+const VIEW_AS_SECRET = String(process.env.VIEW_AS_SECRET || "");
+const ADMIN_AUDIT_COLLECTION = "adminAuditLog";
+
+async function writeAdminAudit(entry, accessToken) {
+  console.log(JSON.stringify({ severity: "NOTICE", logName: "admin-audit", ...entry }));
+  try {
+    await fsCreateDoc(ADMIN_AUDIT_COLLECTION, objectToFsFields(entry), accessToken || (await getAccessToken()));
+  } catch (error) {
+    console.warn("[admin-audit] firestore write failed:", error?.message || error);
+  }
+}
+
+async function verifyMasterAdminRequest(req) {
+  const token = parseBearerToken(req);
+  if (!token || !firebaseAuth) return null;
+  try {
+    const decoded = await firebaseAuth.verifyIdToken(token);
+    if (!authTrust.isTrustedIdentity(decoded, ALLOWED_SIGN_IN_PROVIDERS)) return null;
+    return adminAccess.hasRole(decoded, "master_admin") ? decoded : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Returns {session} when a valid view-as header is present, {error,status} when present but invalid, null when absent.
+async function readViewAsSession(req) {
+  if (!MASTER_ADMIN_ENABLED) return null;
+  const raw = req.headers["x-view-as-session"];
+  if (!raw) return null;
+  if (VIEW_AS_SECRET.length < 32) return { status: 503, error: "view-as not configured" };
+  const session = adminAccess.verify(String(raw), VIEW_AS_SECRET);
+  if (!session) return { status: 401, error: "view-as session invalid or expired" };
+  const actor = await verifyMasterAdminRequest(req);
+  if (!actor || actor.uid !== session.actor) return { status: 403, error: "view-as session belongs to another admin" };
+  return { session, actor };
+}
+
+async function resolveRequestContext(req, accessToken) {
+  const viewAs = await readViewAsSession(req);
+  if (!viewAs) return resolveRequestContextInner(req, accessToken);
+  if (!viewAs.session) {
+    const err = new Error(viewAs.error);
+    err.status = viewAs.status;
+    throw err;
+  }
+  const { session } = viewAs;
+  let subject = { uid: session.subject };
+  try {
+    const rec = await firebaseAuth.getUser(session.subject);
+    subject = { uid: rec.uid, email: rec.email || "", name: rec.displayName || "", picture: rec.photoURL || "" };
+  } catch (_e) {}
+  const context = await resolveRequestContextInner(req, accessToken, subject);
+  return {
+    ...context,
+    viewAs: {
+      sessionId: session.sessionId,
+      actorUid: session.actor,
+      subjectUid: session.subject,
+      subjectName: subject.name || subject.email || session.subject,
+      mode: session.mode,
+      startedAt: session.startedAt,
+      exp: session.exp,
+    },
+  };
+}
+
+if (MASTER_ADMIN_ENABLED) {
+  // Every request during a view-as session is audited; writes are blocked in read-only mode.
+  app.use(async (req, res, next) => {
+    if (!req.headers["x-view-as-session"]) return next();
+    if (req.path === "/api/admin/view-as/end") return next();
+    const viewAs = await readViewAsSession(req);
+    if (!viewAs || !viewAs.session) return res.status(viewAs?.status || 401).json({ ok: false, error: viewAs?.error || "invalid view-as session" });
+    const blocked = viewAs.session.mode === "read_only" && ["POST", "PUT", "PATCH", "DELETE"].includes(req.method.toUpperCase());
+    writeAdminAudit(adminAccess.auditEntry(viewAs.session, blocked ? "write_blocked" : "request", req)).catch(() => {});
+    if (blocked) return res.status(403).json({ ok: false, error: "read-only view-as session: changes are blocked" });
+    res.setHeader("x-view-as-active", "1");
+    return next();
+  });
+
+  app.get("/api/admin/whoami", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    res.json({ ok: true, enabled: true, masterAdmin: Boolean(actor) });
+  });
+
+  app.get("/api/admin/view-as/users", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    if (!actor) return res.status(403).json({ ok: false, error: "master_admin required" });
+    try {
+      const q = String(req.query.q || "").trim().toLowerCase();
+      const page = await firebaseAuth.listUsers(1000);
+      const users = page.users
+        .filter((u) => u.uid !== actor.uid)
+        .filter((u) => !q || (u.email || "").toLowerCase().includes(q) || (u.displayName || "").toLowerCase().includes(q))
+        .slice(0, 50)
+        .map((u) => ({ uid: u.uid, email: u.email || "", displayName: u.displayName || "" }));
+      res.json({ ok: true, users });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "could not list users" });
+    }
+  });
+
+  app.post("/api/admin/view-as/start", async (req, res) => {
+    const actor = await verifyMasterAdminRequest(req);
+    if (!actor) return res.status(403).json({ ok: false, error: "master_admin required" });
+    if (VIEW_AS_SECRET.length < 32) return res.status(503).json({ ok: false, error: "view-as not configured" });
+    try {
+      const { token, session } = adminAccess.startImpersonation({
+        actorUid: actor.uid,
+        actorClaims: actor,
+        subjectUid: String(req.body?.subjectUid || ""),
+        reason: req.body?.reason,
+        secret: VIEW_AS_SECRET,
+        mode: "read_only",
+      });
+      await firebaseAuth.getUser(session.subject);
+      await writeAdminAudit({ ...adminAccess.auditEntry(session, "session_start", req), reason: session.reason });
+      res.json({ ok: true, token, session });
+    } catch (error) {
+      res.status(error?.status || 400).json({ ok: false, error: error?.message || "could not start view-as" });
+    }
+  });
+
+  app.post("/api/admin/view-as/end", async (req, res) => {
+    const session = adminAccess.verify(String(req.headers["x-view-as-session"] || ""), VIEW_AS_SECRET);
+    if (session) await writeAdminAudit(adminAccess.auditEntry(session, "session_end", req));
+    res.json({ ok: true });
+  });
+} else {
+  app.get("/api/admin/whoami", (_req, res) => res.json({ ok: true, enabled: false, masterAdmin: false }));
 }
 
 function requireOperatorAccess(context, res) {
@@ -3311,24 +3467,21 @@ async function listActiveHarvestSources(accessToken) {
 
 async function loadLatestSongForSource(sourceId, accessToken) {
   if (!sourceId) return null;
-  const results = await fsRunQuery(
-    {
-      structuredQuery: {
-        from: [{ collectionId: SONG_COLLECTION }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "sourceId" },
-            op: "EQUAL",
-            value: { stringValue: sourceId },
-          },
-        },
-        orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
-        limit: 1,
-      },
-    },
-    accessToken
+  let results;
+  try {
+    results = await queryLatestSongsForSource(sourceId, "createdAt", 1, accessToken);
+  } catch (error) {
+    // sunoSongs has a (sourceId, importedAt) composite index but not
+    // (sourceId, createdAt). Without it Firestore returns FAILED_PRECONDITION,
+    // which used to 500 /api/vault/freshness and /api/admin/overview.
+    // Fall back to the indexed field and pick the newest createdAt in memory.
+    console.warn(`[freshness] createdAt query failed for ${sourceId}; falling back to importedAt: ${error?.message || error}`);
+    results = await queryLatestSongsForSource(sourceId, "importedAt", 50, accessToken);
+  }
+  const doc = pickNewestByCreatedAt(
+    results.filter((row) => row.document).map((row) => row.document),
+    (candidate) => fsTimestamp(candidate, "createdAt")
   );
-  const doc = results.find((row) => row.document)?.document;
   if (!doc) return null;
   return {
     songKey: fsString(doc, "songKey"),
@@ -3343,6 +3496,26 @@ async function loadLatestSongForSource(sourceId, accessToken) {
   };
 }
 
+async function queryLatestSongsForSource(sourceId, orderField, limit, accessToken) {
+  return fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: SONG_COLLECTION }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "sourceId" },
+            op: "EQUAL",
+            value: { stringValue: sourceId },
+          },
+        },
+        orderBy: [{ field: { fieldPath: orderField }, direction: "DESCENDING" }],
+        limit,
+      },
+    },
+    accessToken
+  );
+}
+
 async function loadLatestSourceSnapshot(accessToken) {
   const sourceDocs = await listActiveHarvestSources(accessToken);
   const accounts = [];
@@ -3353,12 +3526,30 @@ async function loadLatestSourceSnapshot(accessToken) {
       fsString(sourceDoc, "accountLabel") ||
       canonicalAccountLabel(handle) ||
       handle;
-    const latest = await loadLatestSongForSource(sourceId, accessToken);
-    if (!latest) continue;
+    let latest = null;
+    let latestError = "";
+    try {
+      latest = await loadLatestSongForSource(sourceId, accessToken);
+    } catch (error) {
+      // One bad source must not take the whole freshness/overview endpoint down.
+      latestError = String(error?.message || error);
+      console.error(`[freshness] latest-song lookup failed for ${sourceId}: ${latestError}`);
+    }
+    const ingestionMode = fsString(sourceDoc, "ingestionMode") || "public_profile";
+    const authorityStatus = fsString(sourceDoc, "authorityStatus") || "partial_source";
+    const isAuthoritative =
+      ["owned_library", "official_export"].includes(ingestionMode) &&
+      authorityStatus === "verified";
     accounts.push({
-      ...latest,
+      ...(latest || {}),
       handle,
       accountLabel,
+      sourceId,
+      ingestionMode,
+      authorityStatus,
+      isAuthoritative,
+      lastSourceError: fsString(sourceDoc, "lastSourceError"),
+      ...(latestError ? { latestLookupError: latestError } : {}),
     });
   }
 
@@ -4183,6 +4374,7 @@ app.get("/api/vault/freshness", async (req, res) => {
       catalogHealth,
     });
   } catch (error) {
+    console.error(`[freshness] /api/vault/freshness failed: ${error?.stack || error}`);
     return res.status(500).json({
       ok: false,
       error: `vault-freshness failed: ${error?.message || error}`,

@@ -212,3 +212,15 @@ test("summarizeExportFreshness remains healthy when no active account has posted
   assert.equal(summary.status, "healthy");
   assert.match(summary.detail, /No newer public Suno track has appeared/i);
 });
+
+test("pickNewestByCreatedAt picks newest createdAt regardless of input order", () => {
+  const { pickNewestByCreatedAt } = require("../freshness-utils");
+  const docs = [
+    { id: "a", createdAt: "2026-10-15T14:08:28.862Z" },
+    { id: "b", createdAt: "2026-10-20T01:00:00.000Z" },
+    { id: "c", createdAt: "" },
+  ];
+  assert.equal(pickNewestByCreatedAt(docs).id, "b");
+  assert.equal(pickNewestByCreatedAt([]), null);
+  assert.equal(pickNewestByCreatedAt([{ id: "x", createdAt: "" }]).id, "x");
+});

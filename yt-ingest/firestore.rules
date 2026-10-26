@@ -2,9 +2,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isPlatformAdmin() {
+    // S3: a verified Google sign-in (email verified + google.com provider).
+    function isVerifiedGoogle() {
       return request.auth != null
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == "google.com";
+    }
+
+    function isPlatformAdmin() {
+      return isVerifiedGoogle()
+        && (request.auth.token.get("role", "") == "master_admin" || isAdminDoc());
+    }
+
+    function isAdminDoc() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         && (
           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.is_active == true
           || get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true
@@ -31,9 +42,23 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // Admin-only writes everywhere; public reads on sunoSongs
+    // S1: approved members. The Vault UI reads songs through the server, so client reads are
+    // limited to admins, support/master_admin role claims, or a server-set vaultMember claim.
+    function isApprovedMember() {
+      return isVerifiedGoogle()
+        && (request.auth.token.get("vaultMember", false) == true
+            || request.auth.token.get("role", "") in ["support", "master_admin"]);
+    }
+
+    // S2: clients may only change their display name and photo; everything else is server-owned.
+    function onlyProfileCosmetics() {
+      return request.resource.data.diff(resource == null ? {} : resource.data)
+        .affectedKeys().hasOnly(["displayName", "photoURL"]);
+    }
+
+    // S1: no public reads. Admin-only writes.
     match /sunoSongs/{songId} {
-      allow read: if true;
+      allow read: if isApprovedMember() || isPlatformAdmin();
       allow write: if isPlatformAdmin();
     }
 
@@ -43,7 +68,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if canReadOwnUserProfile(uid) || isPlatformAdmin();
-      allow write: if canReadOwnUserProfile(uid) || isPlatformAdmin();
+      allow create, update: if (canReadOwnUserProfile(uid) && onlyProfileCosmetics()) || isPlatformAdmin();
+      allow delete: if isPlatformAdmin();
     }
 
     match /workspaces/{workspaceId} {
@@ -56,8 +82,29 @@ service cloud.firestore {
       }
     }
 
-    match /{document=**} {
-      allow read, write: if isPlatformAdmin();
+    // Song version history: immutable once written (never overwrite, never delete).
+    match /sunoSongs/{songId}/versions/{versionId} {
+      allow read, create: if isPlatformAdmin();
+      allow update, delete: if false;
+    }
+
+    // Other song subcollections (e.g. stats/{day}): admin only, as before.
+    match /sunoSongs/{songId}/{sub}/{docId=**} {
+      allow read, write: if isPlatformAdmin() && sub != "versions";
+    }
+
+    // Admin audit log: written by the server (Admin SDK) only; admins can read, nobody edits or deletes.
+    match /adminAuditLog/{entryId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false;
+    }
+
+    // Catch-all: admin read everywhere; admin write everywhere except the protected paths above.
+    match /{collection}/{document=**} {
+      allow read: if isPlatformAdmin();
+      allow write: if isPlatformAdmin()
+        && collection != "adminAuditLog"
+        && collection != "sunoSongs";
     }
   }
 }

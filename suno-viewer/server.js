@@ -27,8 +27,8 @@ const app = express();
 app.disable("x-powered-by");
 // S4: token routes still used by the local receiver (local-mirror) and maintenance tooling.
 // Bearer-hash protected, rate limited, audit logged. Harvest-test and maintenance build routes removed.
+const { createRateLimiter } = require("./token-hash-auth.cjs");
 {
-  const { createRateLimiter } = require("./token-hash-auth.cjs");
   app.use(["/api/local-mirror/token", "/api/maintenance/token"], createRateLimiter({ windowMs: 60000, max: 20 }));
 }
 require("./local-mirror-token.cjs").installLocalMirrorTokenRoute(app, { getAccessToken });

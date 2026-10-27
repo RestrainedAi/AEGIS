@@ -54,6 +54,8 @@ COPY backfill_lyrics_artifacts.py .
 COPY account_labels.py .
 COPY youtube_publish_channels.py .
 COPY rebuild_catalog.py .
+COPY title_overrides.py .
+COPY fixtures/title_overrides.seed.json fixtures/title_overrides.seed.json
 COPY validate_suno_export_contract.py .
 COPY validate_published_catalog_export.py .
 COPY fixtures/suno_export_contract_fixture.json fixtures/suno_export_contract_fixture.json

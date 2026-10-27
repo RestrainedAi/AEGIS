@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useMemo, useCallback, useRef, CSSProperties, type ReactNode } from 'react'
+import { Fragment, createContext, useContext, useEffect, useState, useMemo, useCallback, useRef, CSSProperties, type ReactNode } from 'react'
 import { SunoSong, YouTubePublishState } from '../types'
 import AudioPlayer from './AudioPlayer'
 import AuthControls from './AuthControls'
@@ -8,6 +8,7 @@ import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
 import { issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity as songHasVaultIdentity, type IssueTag } from '../lib/issue-tags'
 import { createCsvStreamParser } from '../lib/csv-stream'
+import { TITLE_MAX, applyTitleEdits, createTitleEditor, readTitleResponse, titleSourceTag, validateTitleInput, type TitleEdit, type TitleSaveResult } from '../lib/title-edit'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
   vanessa_primary: ['vanessa_primary', 'unshakableechos2341', 'suno_unshakableechos2341'],
@@ -1418,7 +1419,8 @@ function IssueTagChip({ tag, songKey }: { tag: IssueTag; songKey: string }) {
 }
 
 function IssueTagRow({ song }: { song: SunoSong }) {
-  const tags = issueTagsForSong(song as unknown as { [key: string]: unknown })
+  const titleTag = titleSourceTag(song)
+  const tags = [...(titleTag ? [titleTag] : []), ...issueTagsForSong(song as unknown as { [key: string]: unknown })]
   if (!tags.length) return null
   return (
     <div
@@ -1427,6 +1429,160 @@ function IssueTagRow({ song }: { song: SunoSong }) {
       style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, minHeight: 20 }}
     >
       {tags.map(tag => <IssueTagChip key={tag.id} tag={tag} songKey={song.songKey} />)}
+    </div>
+  )
+}
+
+// ── Title editing ─────────────────────────────────────────────────────────────
+type TitleEditApi = {
+  canEdit: boolean
+  save: (song: SunoSong, title: string) => Promise<TitleSaveResult>
+  undo: (song: SunoSong, previous?: TitleEdit) => Promise<TitleSaveResult>
+}
+const TitleEditContext = createContext<TitleEditApi>({
+  canEdit: false,
+  save: async () => { throw new Error('Title editing is not available.') },
+  undo: async () => { throw new Error('Title editing is not available.') },
+})
+
+const titleActionButton: CSSProperties = {
+  padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+  border: '1px solid rgba(127,232,255,0.35)', background: 'rgba(16,40,52,0.8)', color: '#bfeaff',
+}
+
+function EditableTitle({ song, textStyle, chip = false }: { song: SunoSong; textStyle: CSSProperties; chip?: boolean }) {
+  const { canEdit, save, undo } = useContext(TitleEditContext)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState('')
+  const [lastSave, setLastSave] = useState<TitleEdit | null>(null) // what Undo goes back to
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const displayTitle = song.title || 'Untitled'
+  const titleTag = chip ? titleSourceTag(song) : null
+
+  useEffect(() => {
+    if (!lastSave) return
+    const timer = window.setTimeout(() => setLastSave(null), 12000)
+    return () => window.clearTimeout(timer)
+  }, [lastSave])
+
+  const begin = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation()
+    setDraft(song.title || '')
+    setProblem('')
+    setEditing(true)
+    window.setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select() }, 0)
+  }
+  const cancel = () => { setEditing(false); setProblem('') }
+  const commit = async () => {
+    const issue = validateTitleInput(draft)
+    if (issue) { setProblem(issue); return }
+    if (draft.trim() === (song.title || '').trim() && song.titleSource === 'user') { cancel(); return }
+    const before: TitleEdit = { title: song.title || '', titleSource: song.titleSource || '' }
+    setBusy(true)
+    setEditing(false)
+    try {
+      await save(song, draft)
+      setLastSave(before)
+      setProblem('')
+    } catch (error) {
+      setEditing(true)
+      setProblem(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const runUndo = async (e: { stopPropagation: () => void }) => {
+    e.stopPropagation()
+    const previous = lastSave || undefined
+    setBusy(true)
+    try {
+      await undo(song, previous)
+      setLastSave(null)
+      setEditing(false)
+      setProblem('')
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div data-testid="title-editor" onClick={e => e.stopPropagation()} style={{ marginBottom: 6 }}>
+        <input
+          ref={inputRef}
+          aria-label="Song title"
+          value={draft}
+          maxLength={TITLE_MAX + 20}
+          disabled={busy}
+          placeholder="Type a title"
+          onChange={e => { setDraft(e.target.value); if (problem) setProblem('') }}
+          onKeyDown={e => {
+            e.stopPropagation()
+            if (e.key === 'Enter') { e.preventDefault(); void commit() }
+            if (e.key === 'Escape') { e.preventDefault(); cancel() }
+          }}
+          style={{
+            width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 6,
+            border: `1px solid ${problem ? 'rgba(214,112,112,0.7)' : 'rgba(127,232,255,0.45)'}`,
+            background: '#0b0d18', color: '#eef1f7', fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          }}
+        />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+          <button type="button" disabled={busy} onClick={() => void commit()} style={titleActionButton}>Save</button>
+          <button type="button" disabled={busy} onClick={cancel} style={{ ...titleActionButton, borderColor: 'rgba(110,120,170,0.4)', background: 'transparent', color: '#aab3d6' }}>Cancel</button>
+          {song.titleSource === 'user' && (
+            <button type="button" disabled={busy} onClick={e => void runUndo(e)} style={{ ...titleActionButton, borderColor: 'transparent', background: 'transparent', color: '#8fa0d8' }}>
+              Undo last edit
+            </button>
+          )}
+          <span style={{ fontSize: 10, color: '#5d6c90', marginLeft: 'auto' }}>Enter to save · Esc to cancel</span>
+        </div>
+        {problem && <div role="alert" style={{ color: '#ffb4b4', fontSize: 11, marginTop: 5 }}>{problem}</div>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginBottom: textStyle.marginBottom ?? 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <div data-testid="song-title" title={displayTitle} style={{ ...textStyle, marginBottom: 0, minWidth: 0, flex: '0 1 auto' }}>
+          {displayTitle}
+        </div>
+        {canEdit && (
+          <button
+            type="button"
+            className="vault-title-edit"
+            aria-label={`Edit title of ${displayTitle}`}
+            title="Edit title"
+            disabled={busy}
+            onClick={begin}
+            style={{
+              flex: '0 0 auto', width: 22, height: 22, padding: 0, borderRadius: 6, cursor: 'pointer',
+              border: '1px solid rgba(110,120,170,0.35)', background: 'rgba(20,22,40,0.7)',
+              color: '#aab3d6', fontSize: 12, lineHeight: '20px',
+            }}
+          >
+            ✎
+          </button>
+        )}
+        {titleTag && <IssueTagChip tag={titleTag} songKey={song.songKey} />}
+      </div>
+      {(lastSave || (problem && !editing)) && (
+        <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, marginTop: 4 }}>
+          {busy ? <span style={{ color: '#8fa0d8' }}>Saving…</span>
+            : problem ? <span role="alert" style={{ color: '#ffb4b4' }}>{problem}</span>
+            : <span style={{ color: '#9fe3b5' }}>Title saved</span>}
+          {lastSave && !busy && (
+            <button type="button" onClick={e => void runUndo(e)} style={{ ...titleActionButton, padding: '1px 7px' }}>
+              Undo
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1621,16 +1777,14 @@ function SongCard({
 
       {/* Meta */}
       <div style={{ padding: '10px 12px' }}>
-        <div
-          title={song.title}
-          style={{
+        <EditableTitle
+          song={song}
+          textStyle={{
             fontSize: 13, fontWeight: 600, color: '#e0e0f0',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             marginBottom: 4,
           }}
-        >
-          {song.title || 'Untitled'}
-        </div>
+        />
         <div style={{ fontSize: 11, color: '#6666aa', marginBottom: 6 }}>
           {accountDisplay}
         </div>
@@ -2331,19 +2485,21 @@ function CatalogRow({
         </div>
 
         <div style={{ minWidth: 0 }}>
-          <div style={{
-            fontFamily: '"Newsreader", serif',
-            fontStyle: 'italic',
-            fontSize: 26,
-            lineHeight: 1,
-            color: '#eef1f7',
-            marginBottom: 6,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {song.title || 'Untitled'}
-          </div>
+          <EditableTitle
+            song={song}
+            chip
+            textStyle={{
+              fontFamily: '"Newsreader", serif',
+              fontStyle: 'italic',
+              fontSize: 26,
+              lineHeight: 1.1,
+              color: '#eef1f7',
+              marginBottom: 6,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          />
           <div style={{
             fontSize: 11,
             letterSpacing: '.22em',
@@ -2638,6 +2794,28 @@ export default function VaultGrid() {
     return section === 'downloads' ? section : 'archives'
   }, [])
   const [songs, setSongs] = useState<SunoSong[]>([])
+  // Title edits made in this tab; re-applied when the background catalog load replaces rows.
+  const titleEditsRef = useRef<Record<string, TitleEdit>>({})
+  const titleEditor = useMemo(() => createTitleEditor({
+    send: async (songKey, body) => readTitleResponse(await authFetch(`/api/song-title/${encodeURIComponent(songKey)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })),
+    onChange: edits => {
+      titleEditsRef.current = edits
+      setSongs(prev => applyTitleEdits(prev, edits))
+    },
+  }), [])
+  const canEditTitles = Boolean(
+    session?.platformAdmin &&
+    !(typeof window !== 'undefined' && window.sessionStorage.getItem('aegis.viewAs.token'))
+  )
+  const titleEditApi = useMemo<TitleEditApi>(() => ({
+    canEdit: canEditTitles,
+    save: (song, title) => titleEditor.save(song, title),
+    undo: (song, previous) => titleEditor.undo(song, previous),
+  }), [canEditTitles, titleEditor])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Progressive load status: 'songs' while the light list streams in, 'details' while
@@ -2843,7 +3021,7 @@ export default function VaultGrid() {
         const state = initialYouTubeState(song)
         if (state && song.songKey) initialState[song.songKey] = state
       }
-      setSongs(collapseShadowedLyricsRows(rows))
+      setSongs(applyTitleEdits(collapseShadowedLyricsRows(rows), titleEditsRef.current))
       setYtStatus(initialState)
     }
 
@@ -4455,6 +4633,7 @@ export default function VaultGrid() {
   )
 
   return (
+    <TitleEditContext.Provider value={titleEditApi}>
     <div style={{
       minHeight: '100vh',
       background: 'radial-gradient(circle at top, rgba(10, 41, 44, 0.32), transparent 38%), #050608',
@@ -6538,6 +6717,7 @@ export default function VaultGrid() {
         </div>
       </div>
     </div>
+    </TitleEditContext.Provider>
   )
 }
 

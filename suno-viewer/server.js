@@ -1659,7 +1659,7 @@ async function runCatalogExportJob(job, context, accessToken) {
     });
 
   const sourceDocs = await listWorkspaceSourceDocs(job.workspaceId, accessToken);
-  const loaded = await loadCatalogCsv();
+  const loaded = await loadCatalogWithTitles(); // exports use the same titles the Vault shows
   const requestedSongKeySet = new Set(Array.isArray(job.requestSongKeys) ? job.requestSongKeys : []);
   const requestedAccountHandle = String(job.requestAccountHandle || "").trim();
   const allCatalogRows = parseCatalogCsv(loaded.buffer.toString("utf8"));
@@ -5007,12 +5007,44 @@ app.get("/api/catalog-export/:exportId/parts/:partName", async (req, res) => {
   }
 });
 
+// Title overrides (best-guess titles + owner edits), applied at serve time.
+const titleOverridesModule = require("./title-overrides.cjs");
+const TITLE_OVERRIDES_OBJECT = process.env.TITLE_OVERRIDES_OBJECT || "exports/suno/state/title_overrides.json";
+const titleOverrides = titleOverridesModule.createTitleOverrides({
+  adapter: titleOverridesModule.gcsAdapter(storage, BUCKET, TITLE_OVERRIDES_OBJECT),
+  ttlMs: Number(process.env.TITLE_OVERRIDES_TTL_MS || 15000),
+});
+async function loadCatalogWithTitles() {
+  return titleOverrides.applyToCatalog(await loadCatalogCsv());
+}
+titleOverridesModule.installTitleRoutes(app, {
+  titles: titleOverrides,
+  loadCatalogCsv,
+  rateLimit: createRateLimiter({ windowMs: 60000, max: 30 }),
+  // Strictest existing role: platform admins (the owner) only, never inside a "view as" session.
+  authorize: async (req, res) => {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return null;
+    if (context.viewAs) {
+      res.status(403).json({ ok: false, error: "Titles cannot be edited while viewing as another user." });
+      return null;
+    }
+    if (!context.platformAdmin) {
+      res.status(403).json({ ok: false, error: "Only the Vault owner can edit titles." });
+      return null;
+    }
+    return { uid: context.user?.uid || "", email: context.user?.email || "" };
+  },
+  audit: (entry) => writeAdminAudit({ logName: "song-title-audit", ...entry }),
+});
+
 app.get("/catalog.csv", async (req, res) => {
   try {
     const accessToken = await getAccessToken();
     const context = await resolveRequestContext(req, accessToken);
     if (!requireVaultAccess(context, res)) return;
-    const loaded = await loadCatalogCsv();
+    const loaded = await loadCatalogWithTitles();
     const text = loaded.buffer.toString("utf8");
     const inspection = buildCatalogInspection(loaded.source, text);
     console.log(
@@ -5031,7 +5063,7 @@ app.get("/catalog.csv", async (req, res) => {
 
 // Progressive loading: /catalog-light.csv (no lyrics/prompt) + /api/song-text/:songKey.
 const progressiveCatalog = require("./catalog-progressive.cjs").createProgressiveCatalog({
-  loadCatalogCsv,
+  loadCatalogCsv: loadCatalogWithTitles,
   authorize: async (req, res) => {
     const accessToken = await getAccessToken();
     const context = await resolveRequestContext(req, accessToken);

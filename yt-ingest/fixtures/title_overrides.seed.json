@@ -1,0 +1,214 @@
+{
+  "version": 1,
+  "description": "Titles recovered from older harvest files for songs whose Suno title is blank. Seeded into gs://aeonimus-workspaces/exports/suno/state/title_overrides.json; old_file entries only fill blank titles.",
+  "overrides": {
+    "0c532db2-9462-49a7-a02d-e61b52b27b29": {
+      "title": "Fever Dream",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_nessihenize.json (account vanessa_secondary); Suno no longer confirms it."
+    },
+    "11aa57e7-2958-41d5-b368-22134dd35569": {
+      "title": "Fever Dream",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_nessihenize.json (account vanessa_secondary); Suno no longer confirms it."
+    },
+    "1271397e-af1c-4899-b05b-6cdf7e173703": {
+      "title": "ANCIENT GODDESS",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "1a4ebeda-116c-4fc5-8d20-2bb153f30f79": {
+      "title": "Queen V",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "1d0e10d5-68c2-4af9-ba89-f19589b24522": {
+      "title": "Operations",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "23f349bc-f7bb-4086-a6f9-7f5c9acdf30a": {
+      "title": "CONSCIOUSNESS",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "2d474481-2110-4fd0-b1a5-1409c196f28b": {
+      "title": "Dark",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "2d9b409e-d1d1-47f4-ae44-b8ef5e9ef12e": {
+      "title": "PunchLine",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "3c7e3f93-4d0f-4ea0-8ef2-1c2cd2cedb1b": {
+      "title": "SPIRIT",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "55950bb8-554b-4e4a-b753-175ff8fbbb9c": {
+      "title": "dance",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "5c8efdb2-d3fe-422b-9349-3993d98d893f": {
+      "title": "radio 🌟",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "5fbf7141-ea60-4697-9e52-4d5dcb2351bb": {
+      "title": "Goddess",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "79abd22b-826e-4d8a-86ea-d378835bb4b1": {
+      "title": "testify",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "7d703a18-0160-4572-925f-ef353b1ab742": {
+      "title": "Feisty",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "84ac6350-d8b5-48df-b6c8-6aa113e47d6b": {
+      "title": "biblical",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "86e32dd8-944a-4ca4-9792-57df99bdc361": {
+      "title": "taking over world",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "893969bd-4419-4f37-866b-9b5e11940676": {
+      "title": "80s tech",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "8d207b9c-b9de-4208-bd65-fdf5d8a9efd6": {
+      "title": "Gone Evil 😈",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "955d1271-7fd2-43c4-be05-4bfe28fab8a5": {
+      "title": "Psi = FUCK",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "a78e9da1-ef4b-4082-b62e-a379e64529ee": {
+      "title": "THRONE",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "b9c4874c-55e3-4f4d-9c3f-a99eac0cc2dc": {
+      "title": "sovereign system",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "cb39738d-5e3a-412e-bbd2-63f2d65b5ee0": {
+      "title": "Gravity's Truth",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_gravitystruth.json (account gravitystruth); Suno no longer confirms it."
+    },
+    "d0493951-7391-4bae-9a0f-7c9aff6196b2": {
+      "title": "sUPERNOVa",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "d81b7b1f-92aa-4631-b8f4-6b8a83c12566": {
+      "title": "SOVEREIGN BITCH",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from suno_manifest.csv (account vanessa_primary); Suno no longer confirms it."
+    },
+    "dc73daa1-c2ce-445a-9e68-43c309f333ab": {
+      "title": "AGI",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_unshakableechos2341.json (account vanessa_primary); Suno no longer confirms it."
+    },
+    "e6378018-0da1-4efa-9695-b0e18b42f57e": {
+      "title": "Stars Aren't Whispering Your Name",
+      "source": "old_file",
+      "setBy": "seed:2026-10-27",
+      "setAt": "2026-10-27T00:00:00Z",
+      "previousTitle": "",
+      "note": "Recovered from profile_probe_gravitystruth.json (account gravitystruth); Suno no longer confirms it."
+    }
+  }
+}

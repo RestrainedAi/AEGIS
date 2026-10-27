@@ -76,8 +76,16 @@ FIELDNAMES = [
     "ytCanonicalUrl",
     "ytPublishedAt",
     "mediaIssues",
+    "titleSource",
 ]
 
+from title_overrides import (
+    TITLE_OVERRIDES_GCS,
+    apply_titles,
+    load_gcs_overrides,
+    load_seed,
+    merged_overrides,
+)
 from account_labels import (
     HANDLE_ALIAS_MAP,
     canonical_account_handle,
@@ -315,6 +323,7 @@ def doc_to_row(doc, run_ts):
         "ytCanonicalUrl": normalize_inline_text(flat.get("ytCanonicalUrl", "")),
         "ytPublishedAt": normalize_inline_text(flat.get("ytPublishedAt", "")),
         "mediaIssues": normalize_inline_text(flat.get("mediaIssues", "")),
+        "titleSource": "",
     }
 
 
@@ -478,8 +487,9 @@ def drop_missing_media_paths(rows, existing):
     return dropped
 
 
-def build_rows(docs, run_ts):
+def build_rows(docs, run_ts, overrides=None):
     rows = [doc_to_row(doc, run_ts) for doc in docs]
+    apply_titles(rows, overrides or {})
     return sorted(rows, key=lambda row: row.get("createdAt", ""), reverse=True)
 
 
@@ -499,7 +509,20 @@ def main():
     docs = fetch_all(token)
     print(f"Total docs: {len(docs)}")
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    rows = build_rows(docs, run_ts)
+    seed = load_seed()
+    try:
+        gcs_overrides = load_gcs_overrides(token)
+    except Exception as exc:
+        # Never block the catalog on the overrides file; the viewer applies it at serve time too.
+        print(f"[WARN] Title overrides unavailable ({TITLE_OVERRIDES_GCS}): {type(exc).__name__}: {exc}", file=sys.stderr)
+        gcs_overrides = {}
+    overrides = merged_overrides(gcs_overrides, seed)
+    rows = build_rows(docs, run_ts, overrides)
+    sources = {}
+    for row in rows:
+        key = row.get("titleSource") or "blank"
+        sources[key] = sources.get(key, 0) + 1
+    print(f"  Titles: {len(overrides)} overrides ({len(gcs_overrides)} from GCS); sources {sources}")
     if os.environ.get("CATALOG_VERIFY_MEDIA", "true").strip().lower() not in {"0", "false", "no", "off"}:
         media_bucket = os.environ.get("SUNO_MEDIA_BUCKET", "gs://aeonimus-suno-media").replace("gs://", "").strip("/")
         try:

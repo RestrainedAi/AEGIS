@@ -4,6 +4,8 @@ export interface SunoSong {
   account_handle: string
   account_label: string
   title: string
+  // How the title was chosen: suno | user (edited in the Vault) | old_file (best guess) | lyrics | ''
+  titleSource?: string
   // Suno metadata fields (new — populated by delta sync + firestore_upsert)
   tags?: string            // comma-separated tag string
   prompt?: string          // Suno generation prompt

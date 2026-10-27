@@ -60,8 +60,33 @@ test("the song card renders the tags in one spot and the Has issues quick view e
   assert.match(grid, /aria-describedby/);
 });
 
-test("untitled songs removed from Suno stay listed in the grid", () => {
+test("untitled songs with issue tags (incl. removed from Suno) stay listed in the grid", () => {
   const grid = fs.readFileSync(path.join(__dirname, "..", "src", "components", "VaultGrid.tsx"), "utf8");
   const start = grid.indexOf("const hasRenderableVaultIdentity");
-  assert.match(grid.slice(start, start + 400), /includes\('removed_from_suno'\)/);
+  // The grid delegates to the shared helper, which is behavior-tested below.
+  assert.match(grid.slice(start, start + 400), /songHasVaultIdentity\(/);
+  assert.match(grid, /hideRemoved\) out = out\.filter\(s => !songIsRemoved\(s\)\)/);
+});
+
+const { isRemovedFromSuno, hasRenderableVaultIdentity } = require("../issue-tags");
+
+test("isRemovedFromSuno honors the mediaIssues tag as well as status", () => {
+  assert.equal(isRemovedFromSuno({ ...healthy, status: "removed_from_suno" }), true);
+  assert.equal(isRemovedFromSuno({ ...healthy, status: "active", mediaIssues: "removed_from_suno;no_video" }), true);
+  assert.equal(isRemovedFromSuno({ ...healthy, mediaIssues: "no_video" }), false);
+  assert.equal(isRemovedFromSuno(healthy), false);
+});
+
+test("hasRenderableVaultIdentity keeps titled songs and any ID with an issue tag", () => {
+  assert.equal(hasRenderableVaultIdentity({ ...healthy, title: "T", createdAt: "2026-01-01" }), true);
+  assert.equal(hasRenderableVaultIdentity({ ...healthy, title: "", createdAt: "" }), false);
+  assert.equal(hasRenderableVaultIdentity({ songKey: "x", mediaIssues: "silent_placeholder" }), true);
+  assert.equal(hasRenderableVaultIdentity({ songKey: "x", status: "removed_from_suno" }), true);
+  assert.equal(hasRenderableVaultIdentity({ songKey: "", mediaIssues: "no_audio" }), false);
+});
+
+test("browser issue-tags.ts exports the same helpers", () => {
+  const tsSrc = fs.readFileSync(path.join(__dirname, "..", "src", "lib", "issue-tags.ts"), "utf8");
+  assert.match(tsSrc, /export function isRemovedFromSuno/);
+  assert.match(tsSrc, /export function hasRenderableVaultIdentity/);
 });

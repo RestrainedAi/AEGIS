@@ -5022,11 +5022,23 @@ app.get("/catalog.csv", async (req, res) => {
     res.set("X-Catalog-Source", loaded.source);
     res.set("X-Catalog-Row-Count", String(inspection.rowCount || 0));
     res.set("X-Catalog-Newest", inspection.newestCreatedAt || "");
-    res.type("text/csv").send(loaded.buffer);
+    // Compressed when the browser accepts it (lyrics compress ~4x).
+    progressiveCatalog.sendCsv(req, res, loaded.buffer);
   } catch (e) {
     res.status(500).type("text/plain").send("Failed to load catalog.csv: " + (e?.message || e));
   }
 });
+
+// Progressive loading: /catalog-light.csv (no lyrics/prompt) + /api/song-text/:songKey.
+const progressiveCatalog = require("./catalog-progressive.cjs").createProgressiveCatalog({
+  loadCatalogCsv,
+  authorize: async (req, res) => {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    return requireVaultAccess(context, res);
+  },
+});
+progressiveCatalog.install(app);
 
 app.get("/api/song-media/:songKey/:kind", async (req, res) => {
   try {

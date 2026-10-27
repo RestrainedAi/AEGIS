@@ -47,4 +47,15 @@ function issueTagsForSong(song) {
 
 function songHasIssues(song) { return issueIdsForSong(song).length > 0; }
 
-module.exports = { ISSUE_TAGS, issueIdsForSong, issueTagsForSong, songHasIssues };
+// "Hide Removed from SUNO" must honor the mediaIssues tag as well as the status field.
+function isRemovedFromSuno(song) { return issueIdsForSong(song).includes("removed_from_suno"); }
+
+// A row is listed when it has a title and date, or when it has a song ID and at least
+// one issue tag (it then shows as "Untitled" with a blank date) so problem songs stay visible.
+function hasRenderableVaultIdentity(song) {
+  const s = song || {};
+  if (str(s.title) && str(s.createdAt)) return true;
+  return Boolean(str(s.songKey)) && songHasIssues(s);
+}
+
+module.exports = { ISSUE_TAGS, issueIdsForSong, issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity };

@@ -8,6 +8,9 @@ export interface SunoSong {
   tags?: string            // comma-separated tag string
   prompt?: string          // Suno generation prompt
   lyrics?: string
+  // Set by /catalog-light.csv, which omits lyrics/prompt: '1' when the full row has them.
+  hasLyricsText?: string
+  hasPromptText?: string
   lyricsStatus?: string
   gcsLyricsTxt?: string
   gcsLyricsJson?: string

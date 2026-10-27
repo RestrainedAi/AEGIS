@@ -52,3 +52,16 @@ export function issueTagsForSong(song: IssueSong | null | undefined): IssueTag[]
 
 export function songHasIssues(song: IssueSong | null | undefined): boolean { return issueIdsForSong(song).length > 0; }
 
+
+// "Hide Removed from SUNO" must honor the mediaIssues tag as well as the status field.
+export function isRemovedFromSuno(song: IssueSong | null | undefined): boolean {
+  return issueIdsForSong(song).includes("removed_from_suno")
+}
+
+// A row is listed when it has a title and date, or when it has a song ID and at least
+// one issue tag (it then shows as "Untitled" with a blank date) so problem songs stay visible.
+export function hasRenderableVaultIdentity(song: IssueSong | null | undefined): boolean {
+  const s: IssueSong = song || {}
+  if (str(s.title) && str(s.createdAt)) return true
+  return Boolean(str(s.songKey)) && songHasIssues(s)
+}

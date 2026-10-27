@@ -6,7 +6,8 @@ import AccountMenu from './AccountMenu'
 import { authFetch, useAuth } from '../lib/firebaseAuth'
 import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
-import { issueIdsForSong, issueTagsForSong, songHasIssues, type IssueTag } from '../lib/issue-tags'
+import { issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity as songHasVaultIdentity, type IssueTag } from '../lib/issue-tags'
+import { createCsvStreamParser } from '../lib/csv-stream'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
   vanessa_primary: ['vanessa_primary', 'unshakableechos2341', 'suno_unshakableechos2341'],
@@ -218,70 +219,36 @@ const catalogExportScopeLabel = (job?: CatalogExportJob | null) => {
   return 'Full catalog'
 }
 
-// ── CSV parser (supports quoted fields, escaped quotes, and embedded newlines) ──
-function parseCSV(text: string): SunoSong[] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-
-  const pushField = () => {
-    row.push(field)
-    field = ''
-  }
-
-  const pushRow = () => {
-    const hasContent = row.some(cell => cell.trim() !== '') || field.trim() !== ''
-    pushField()
-    if (hasContent) rows.push(row)
-    row = []
-  }
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    const next = text[i + 1]
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        field += '"'
-        i += 1
-      } else {
-        inQuotes = !inQuotes
-      }
-      continue
-    }
-
-    if (ch === ',' && !inQuotes) {
-      pushField()
-      continue
-    }
-
-    if ((ch === '\n' || ch === '\r') && !inQuotes) {
-      if (ch === '\r' && next === '\n') i += 1
-      pushRow()
-      continue
-    }
-
-    field += ch
-  }
-
-  if (field.length > 0 || row.length > 0) {
-    pushRow()
-  }
-
-  if (rows.length < 2) return []
-
-  const headers = rows[0].map(header => header.trim())
-  return rows
-    .slice(1)
-    .filter(candidate => candidate.some(value => value.trim() !== ''))
-    .map(candidate => {
-      const record: Record<string, string> = {}
-      headers.forEach((header, idx) => {
-        record[header] = candidate[idx] ?? ''
-      })
-      return record as unknown as SunoSong
-    })
+// Small "loading N of M" pill shown while the Vault fills in progressively.
+function VaultLoadProgress({ progress }: { progress: { phase: 'songs' | 'details' | 'done' | 'partial'; loaded: number; total: number } }) {
+  if (progress.phase === 'done') return null
+  const pct = progress.total > 0 ? Math.min(100, Math.round((progress.loaded / progress.total) * 100)) : 0
+  const label =
+    progress.phase === 'songs'
+      ? `Loading songs ${progress.loaded.toLocaleString()} of ${progress.total.toLocaleString()}`
+      : progress.phase === 'details'
+        ? `Loading lyrics for search ${progress.loaded.toLocaleString()} of ${progress.total.toLocaleString()}`
+        : 'Lyrics search unavailable right now; lyrics still open on each card'
+  return (
+    <span
+      data-testid="vault-load-progress"
+      role="status"
+      aria-live="polite"
+      title={progress.phase === 'details' ? 'Songs are ready. Lyrics and prompts are still loading, so lyric search and the lyrics filter finish once this is done.' : undefined}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, padding: '2px 8px',
+        borderRadius: 999, background: '#16182a', border: '1px solid #2c2f4d', color: '#9aa3c7',
+        fontSize: 11, verticalAlign: 'middle', whiteSpace: 'nowrap',
+      }}
+    >
+      {progress.phase !== 'partial' && (
+        <span style={{ width: 44, height: 4, borderRadius: 2, background: '#262a44', overflow: 'hidden', display: 'inline-block' }}>
+          <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: '#7c6fff', transition: 'width .3s' }} />
+        </span>
+      )}
+      {label}
+    </span>
+  )
 }
 
 const fmtDur = (s: string) => {
@@ -291,6 +258,8 @@ const fmtDur = (s: string) => {
 }
 
 const fmtDate = (iso: string) => {
+  // Undated songs (no details from Suno yet) show a blank date, not "Invalid Date".
+  if (!String(iso || '').trim() || Number.isNaN(new Date(iso).getTime())) return ''
   try {
     return new Date(iso).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric'
@@ -384,10 +353,58 @@ function useProtectedAssetUrl(sourceUrl?: string) {
   return resolvedUrl
 }
 
+// Titled + dated songs, plus any song ID with an issue tag (shown as "Untitled", blank date),
+// so problem songs that never got their details from Suno still appear in the Vault.
 const hasRenderableVaultIdentity = (song: SunoSong) =>
-  (Boolean(String(song.title || '').trim()) && Boolean(String(song.createdAt || '').trim())) ||
-  // Songs Suno deleted often lost their title and date; keep them listed (as Untitled).
-  (Boolean(song.songKey) && issueIdsForSong(song as unknown as { [key: string]: unknown }).includes('removed_from_suno'))
+  songHasVaultIdentity(song as unknown as { [key: string]: unknown })
+
+// Removed per the status field OR the mediaIssues "Removed from Suno" tag.
+const songIsRemoved = (song?: SunoSong | null) =>
+  Boolean(song) && isRemovedFromSuno(song as unknown as { [key: string]: unknown })
+
+// Lyrics present in the row, or flagged by the light catalog (text fetched on demand).
+const songHasLyricsText = (song: SunoSong) =>
+  Boolean(formatLyricsText(song.lyrics) || song.hasLyricsText === '1')
+
+// Lyrics/prompt for one song. The light catalog leaves them out; fetch when a card opens.
+const songTextCache = new Map<string, Promise<{ lyrics: string; prompt: string }>>()
+function fetchSongText(songKey: string) {
+  let pending = songTextCache.get(songKey)
+  if (!pending) {
+    pending = authFetch(`/api/song-text/${encodeURIComponent(songKey)}`)
+      .then(async r => {
+        const payload = await r.json().catch(() => null)
+        if (!r.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${r.status}`)
+        return { lyrics: String(payload.lyrics || ''), prompt: String(payload.prompt || '') }
+      })
+    pending.catch(() => songTextCache.delete(songKey))
+    songTextCache.set(songKey, pending)
+  }
+  return pending
+}
+function useSongText(song: SunoSong, wanted: boolean) {
+  const needsFetch = Boolean(
+    song.songKey &&
+    ((!song.lyrics && song.hasLyricsText === '1') || (!song.prompt && song.hasPromptText === '1'))
+  )
+  const [fetched, setFetched] = useState<{ lyrics: string; prompt: string } | null>(null)
+  const [textLoading, setTextLoading] = useState(false)
+  useEffect(() => {
+    if (!wanted || !needsFetch || fetched) return
+    let alive = true
+    setTextLoading(true)
+    fetchSongText(song.songKey)
+      .then(text => { if (alive) setFetched(text) })
+      .catch(() => {})
+      .finally(() => { if (alive) setTextLoading(false) })
+    return () => { alive = false }
+  }, [wanted, needsFetch, fetched, song.songKey])
+  return {
+    lyrics: song.lyrics || fetched?.lyrics || '',
+    prompt: song.prompt || fetched?.prompt || '',
+    textLoading,
+  }
+}
 
 const decodeEscapedMultiline = (value?: string) =>
   String(value || '')
@@ -695,7 +712,7 @@ const songCreatedDay = (song: SunoSong) => String(song.createdAt || '').trim().s
 const songHasUsableLyrics = (song: SunoSong) => {
   const status = String(song.lyricsStatus || '').trim().toUpperCase()
   return Boolean(
-    formatLyricsText(song.lyrics) ||
+    songHasLyricsText(song) ||
     String(song.gcsLyricsTxt || '').trim() ||
     String(song.gcsLyricsVtt || '').trim() ||
     status === 'OK'
@@ -772,7 +789,7 @@ function isPublishedState(state?: YouTubePublishState | null) {
 }
 
 function isPublishBlocked(song: SunoSong, state?: YouTubePublishState | null) {
-  if (!song.songKey || song.status === 'removed_from_suno') return true
+  if (!song.songKey || songIsRemoved(song)) return true
   if (!state) return false
   return state.status === 'queued' || state.status === 'uploading' || isPublishedState(state)
 }
@@ -1450,6 +1467,7 @@ function SongCard({
   const [showLyrics, setShowLyrics] = useState(false)
   const [showMobilePlayer, setShowMobilePlayer] = useState(false)
   const [hover, setHover] = useState(false)
+  const songText = useSongText(song, showLyrics || (desktopInteractive ? isFocused : showMobilePlayer))
     const audio = (
       (isHttpUrl(song.audio_url) && song.audio_url) ||
       (isHttpUrl(song.gcs_latest_audio) && song.gcs_latest_audio) ||
@@ -1464,15 +1482,15 @@ function SongCard({
       ((isGsUrl(song.gcs_latest_thumb) || isGsUrl(song.gcs_thumb)) && songMediaProxyUrl(song.songKey, 'thumb')) ||
       (song.songKey ? `https://cdn2.suno.ai/image_${song.songKey}.jpeg` : '')
     )
-  const isRemoved = song.status === 'removed_from_suno'
+  const isRemoved = songIsRemoved(song)
   const publishDisabled = isPublishBlocked(song, ytState) || !publishAccess.enabled
   const canDownloadArtifacts = downloadAccess.singleEnabled
   const canSelectForBatch = downloadAccess.batchEnabled
-  const lyricsText = formatLyricsText(song.lyrics)
-  const lyricsBlocks = parseLyricsBlocks(song.lyrics)
+  const lyricsText = formatLyricsText(songText.lyrics)
+  const lyricsBlocks = parseLyricsBlocks(songText.lyrics)
   const lyricsFileUrl = song.gcsLyricsTxt ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/txt` : ''
   const lyricsVttUrl = song.gcsLyricsVtt ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/vtt` : ''
-  const hasLyrics = Boolean(lyricsText || lyricsFileUrl)
+  const hasLyrics = Boolean(lyricsText || lyricsFileUrl || song.hasLyricsText === '1')
   const styleTokens = styleTokensForSong(song).slice(0, 3)
   const missingAssetState = buildMissingAssetState(song)
   const artworkSrc = useProtectedAssetUrl(thumb)
@@ -1668,7 +1686,7 @@ function SongCard({
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#555' }}>
           <span>👁 {parseInt(song.views || '0').toLocaleString()}</span>
           <span>♥ {parseInt(song.likes || '0').toLocaleString()}</span>
-          <span title={song.createdAt}>📅 {fmtDate(song.createdAt)}</span>
+          {fmtDate(song.createdAt) && <span title={song.createdAt}>📅 {fmtDate(song.createdAt)}</span>}
         </div>
         <button
           onClick={e => {
@@ -2182,13 +2200,14 @@ function CatalogRow({
 }) {
   const [showLyrics, setShowLyrics] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
+  const songText = useSongText(song, showLyrics || showPlayer)
 
-  const isRemoved = song.status === 'removed_from_suno'
+  const isRemoved = songIsRemoved(song)
   const accountDisplay = canonicalAccount(song) || 'unknown source'
   const styleTokens = styleTokensForSong(song).slice(0, 5)
-  const lyricsText = formatLyricsText(song.lyrics)
-  const lyricsBlocks = parseLyricsBlocks(song.lyrics)
-  const hasLyrics = Boolean(lyricsText)
+  const lyricsText = formatLyricsText(songText.lyrics)
+  const lyricsBlocks = parseLyricsBlocks(songText.lyrics)
+  const hasLyrics = Boolean(lyricsText || song.hasLyricsText === '1')
   const lyricsFileUrl = song.gcsLyricsTxt
     ? `/api/lyrics-artifact/${encodeURIComponent(song.songKey)}/txt`
     : ''
@@ -2437,7 +2456,7 @@ function CatalogRow({
               </a>
             </div>
           )}
-          {(song.description || song.caption || song.prompt) && (
+          {(song.description || song.caption || songText.prompt) && (
             <div style={{
               color: '#727a93',
               fontSize: 11,
@@ -2448,7 +2467,7 @@ function CatalogRow({
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
             }}>
-              {song.description || song.caption || song.prompt}
+              {song.description || song.caption || songText.prompt}
             </div>
           )}
         </div>
@@ -2621,6 +2640,9 @@ export default function VaultGrid() {
   const [songs, setSongs] = useState<SunoSong[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Progressive load status: 'songs' while the light list streams in, 'details' while
+  // lyrics/prompts load in the background, 'done' once the full catalog is in memory.
+  const [loadProgress, setLoadProgress] = useState<{ phase: 'songs' | 'details' | 'done' | 'partial'; loaded: number; total: number }>({ phase: 'done', loaded: 0, total: 0 })
   const [search, setSearch] = useState('')
   const [acct, setAcct] = useState('')
   const [styleFilter, setStyleFilter] = useState('')
@@ -2813,39 +2835,105 @@ export default function VaultGrid() {
     setError(null)
 
     const controller = new AbortController()
+    const { signal } = controller
 
-    authFetch('/catalog.csv', { token, signal: controller.signal })
-      .then(async r => {
-        const text = await r.text()
-        if (!r.ok) {
-          throw new Error(text || `HTTP ${r.status}`)
+    const applyRows = (rows: SunoSong[]) => {
+      const initialState: Record<string, YouTubePublishState> = {}
+      for (const song of rows) {
+        const state = initialYouTubeState(song)
+        if (state && song.songKey) initialState[song.songKey] = state
+      }
+      setSongs(collapseShadowedLyricsRows(rows))
+      setYtStatus(initialState)
+    }
+
+    // Stream a CSV and hand back rows as they arrive (onRows is throttled).
+    const streamCsv = async (
+      url: string,
+      onRows: (rows: SunoSong[], total: number) => void,
+      firstBatch = 60,
+    ) => {
+      const response = await authFetch(url, { token, signal })
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(text || `HTTP ${response.status}`)
+      }
+      const total = Number(response.headers.get('X-Catalog-Row-Count') || 0)
+      const parser = createCsvStreamParser()
+      const rows: SunoSong[] = []
+      if (!response.body || typeof TextDecoder === 'undefined') {
+        rows.push(...(parser.push(await response.text()) as unknown as SunoSong[]))
+        rows.push(...(parser.end() as unknown as SunoSong[]))
+        onRows(rows, total || rows.length)
+        return { rows, total: total || rows.length }
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let lastFlush = 0
+      let flushed = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        rows.push(...(parser.push(decoder.decode(value, { stream: true })) as unknown as SunoSong[]))
+        const now = performance.now()
+        if (rows.length > flushed && ((flushed === 0 && rows.length >= firstBatch) || (flushed > 0 && now - lastFlush > 400))) {
+          onRows(rows.slice(), total || rows.length)
+          flushed = rows.length
+          lastFlush = now
         }
-        return text
-      })
-      .then(t => {
-        const parsed = parseCSV(t)
-        const initialState: Record<string, YouTubePublishState> = {}
+      }
+      rows.push(...(parser.push(decoder.decode()) as unknown as SunoSong[]))
+      rows.push(...(parser.end() as unknown as SunoSong[]))
+      onRows(rows, total || rows.length)
+      return { rows, total: total || rows.length }
+    }
 
-        for (const song of parsed) {
-          const state = initialYouTubeState(song)
-          if (state && song.songKey) {
-            initialState[song.songKey] = state
+    const run = async () => {
+      let lightRows: SunoSong[] | null = null
+      try {
+        // 1) Light list (no lyrics/prompt, newest first): first songs show in seconds.
+        const light = await streamCsv('/catalog-light.csv', (rows, total) => {
+          applyRows(rows)
+          setLoading(false)
+          setLoadProgress({ phase: 'songs', loaded: rows.length, total })
+        })
+        lightRows = light.rows
+        setLoadProgress({ phase: 'details', loaded: 0, total: light.total })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        console.warn('[vault] light catalog unavailable; falling back to catalog.csv', e)
+      }
+
+      // 2) Full catalog: lyrics + prompts for search, filters and exports. When the light
+      //    list worked this runs in the background; otherwise it is the old blocking path.
+      try {
+        const full = await streamCsv('/catalog.csv', (rows, total) => {
+          if (lightRows) {
+            setLoadProgress({ phase: 'details', loaded: rows.length, total })
+          } else {
+            applyRows(rows)
+            setLoading(false)
+            setLoadProgress({ phase: 'songs', loaded: rows.length, total })
           }
-        }
-
-        setSongs(collapseShadowedLyricsRows(parsed))
-        setYtStatus(initialState)
+        })
+        applyRows(full.rows)
         setLoading(false)
-      })
-      .catch(e => {
-        if (e instanceof DOMException && e.name === 'AbortError') {
+        setLoadProgress({ phase: 'done', loaded: full.rows.length, total: full.total })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        if (lightRows) {
+          // Keep the light list on screen; lyrics still load per card on demand.
+          setLoadProgress({ phase: 'partial', loaded: lightRows.length, total: lightRows.length })
           return
         }
         setSongs([])
         setYtStatus({})
-        setError(e.message)
+        setError(e instanceof Error ? e.message : String(e))
         setLoading(false)
-      })
+      }
+    }
+
+    void run()
 
     return () => {
       controller.abort()
@@ -3777,7 +3865,7 @@ export default function VaultGrid() {
   }, [songs])
 
   const removedCount = useMemo(() =>
-    songs.filter(s => s.status === 'removed_from_suno').length,
+    songs.filter(s => songIsRemoved(s)).length,
   [songs])
 
   const searchMatchBySongKey = useMemo(() => {
@@ -3822,13 +3910,13 @@ export default function VaultGrid() {
 
   const filtered = useMemo(() => {
     let out = songs.filter(hasRenderableVaultIdentity)
-    if (hideRemoved) out = out.filter(s => s.status !== 'removed_from_suno')
+    if (hideRemoved) out = out.filter(s => !songIsRemoved(s))
     if (issuesOnly) out = out.filter(s => songHasIssues(s as unknown as { [key: string]: unknown }))
     if (acct) out = out.filter(s => canonicalAccount(s) === acct)
     if (styleFilter.trim()) out = out.filter(song => matchesStyleFilter(song, styleFilter))
     if (lyricsFilter !== 'all') {
       out = out.filter(song => {
-        const hasLyrics = Boolean(formatLyricsText(song.lyrics))
+        const hasLyrics = songHasLyricsText(song)
         return lyricsFilter === 'has_lyrics' ? hasLyrics : !hasLyrics
       })
     }
@@ -3847,8 +3935,15 @@ export default function VaultGrid() {
         const bScore = b.songKey ? searchMatchBySongKey.get(b.songKey)?.score || 0 : 0
         if (bScore !== aScore) return bScore - aScore
       }
-      if (sort === 'createdAt')
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || 0
+      if (sort === 'createdAt') {
+        // Undated songs go last instead of landing in random spots (NaN comparisons).
+        const at = new Date(a.createdAt).getTime()
+        const bt = new Date(b.createdAt).getTime()
+        const aOk = Number.isFinite(at)
+        const bOk = Number.isFinite(bt)
+        if (aOk !== bOk) return aOk ? -1 : 1
+        return aOk ? bt - at : 0
+      }
       if (sort === 'views')    return parseInt(b.views || '0') - parseInt(a.views || '0')
       if (sort === 'likes')    return parseInt(b.likes || '0') - parseInt(a.likes || '0')
       if (sort === 'duration') return parseFloat(b.duration || '0') - parseFloat(a.duration || '0')
@@ -4614,6 +4709,7 @@ export default function VaultGrid() {
             </div>
             <p style={{ color: '#6f7890', fontSize: 13, margin: 0 }}>
               {songs.length.toLocaleString()} tracks cataloged
+              <VaultLoadProgress progress={loadProgress} />
               {removedCount > 0 && (
                 <span style={{ color: '#75595d', marginLeft: 8 }}>
                   · {removedCount} removed from Suno
@@ -4628,6 +4724,7 @@ export default function VaultGrid() {
             </h1>
             <p style={{ color: '#555', fontSize: 13, marginTop: 4 }}>
               {songs.length.toLocaleString()} tracks cataloged
+              <VaultLoadProgress progress={loadProgress} />
               {removedCount > 0 && (
                 <span style={{ color: '#664444', marginLeft: 8 }}>
                   · {removedCount} removed from Suno
@@ -6191,7 +6288,7 @@ export default function VaultGrid() {
                       </td>
                       <td style={{ padding: '10px 12px', minWidth: 180 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          {songMatch?.status === 'removed_from_suno' ? (
+                          {songIsRemoved(songMatch) ? (
                             <span style={{ color: '#ffb0b0', fontSize: 11 }}>Removed from SUNO</span>
                           ) : vaultState ? (
                             <YtBadge state={vaultState} />

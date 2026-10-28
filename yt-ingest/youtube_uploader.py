@@ -23,9 +23,13 @@ from datetime import datetime, timezone
 
 from account_labels import canonical_account_label
 from youtube_publish_channels import (
-    DEFAULT_PUBLISH_CHANNEL,
+    user_channel_path,
+    user_map_path,
+    UnmappedPublishChannel,
+    account_key,
     oauth_secret_for_channel,
     resolve_publish_channel,
+    unmapped_message,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -126,11 +130,13 @@ def get_secret(gcp_token: str, secret_id: str) -> str:
     return base64.b64decode(data["payload"]["data"]).decode("utf-8")
 
 
-def get_youtube_token(gcp_token: str, publish_channel: str = DEFAULT_PUBLISH_CHANNEL) -> str:
+def get_youtube_token(gcp_token: str, publish_channel: str, owner_uid: str) -> str:
     """Exchange refresh token for a YouTube API access token."""
     client_secrets = json.loads(get_secret(gcp_token, SECRET_CLIENT))
     installed = client_secrets.get("installed") or client_secrets.get("web")
-    secret_id = oauth_secret_for_channel(publish_channel)
+    secret_id = oauth_secret_for_channel(
+        publish_channel, fs_get_channel_registry_entry(gcp_token, owner_uid, publish_channel)
+    )
     refresh_token = get_secret(gcp_token, secret_id).strip()
     if not refresh_token:
         raise RuntimeError(f"YouTube refresh token secret is empty: {secret_id}")
@@ -153,15 +159,70 @@ def get_youtube_token(gcp_token: str, publish_channel: str = DEFAULT_PUBLISH_CHA
         ) from e
 
 
-def resolve_publish_channel_for_doc(doc: dict, queue_doc: dict | None = None) -> str:
-    queued = queue_val(queue_doc, "ytPublishChannel")
-    if queued:
-        return queued
-    return resolve_publish_channel(
-        account_label=fs_val(doc, "account_label") or canonical_account_label(fs_val(doc, "handle")),
-        account_handle=fs_val(doc, "account_handle") or fs_val(doc, "handle"),
-        source_id=fs_val(doc, "account_sourceId") or fs_val(doc, "sourceId"),
-    )
+def _fs_get_optional(gcp_token: str, doc_path: str) -> dict | None:
+    if not doc_path:
+        return None
+    safe = "/".join(urllib.parse.quote(part, safe="") for part in doc_path.split("/"))
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/{DATABASE}/documents/{safe}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {gcp_token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def fs_get_channel_registry_entry(gcp_token: str, owner_uid: str, channel: str) -> dict:
+    """users/{uid}/youtubeChannels/{channel} -> {channel: {tokenSecret, enabled}}; {} if not that user's."""
+    if not (gcp_token and owner_uid and channel):
+        return {}
+    doc = _fs_get_optional(gcp_token, user_channel_path(owner_uid, channel))
+    if not doc:
+        return {}
+    f = doc.get("fields", {})
+    return {channel: {
+        "tokenSecret": f.get("tokenSecret", {}).get("stringValue", ""),
+        "enabled": f.get("enabled", {}).get("booleanValue", True),
+    }}
+
+
+def fs_get_channel_map_entry(gcp_token: str, owner_uid: str, account: str) -> dict:
+    """users/{uid}/publishChannelMap/{account} -> {account: channel} or {}."""
+    if not (gcp_token and owner_uid and account):
+        return {}
+    doc = _fs_get_optional(gcp_token, user_map_path(owner_uid, account))
+    channel = (doc or {}).get("fields", {}).get("channel", {}).get("stringValue", "")
+    return {account: channel} if channel else {}
+
+
+def resolve_publish_target(doc: dict, queue_doc: dict | None = None, gcp_token: str = "") -> tuple[str, str]:
+    """(ownerUid, channel) for this publish, checked against the owner's own linked channels.
+
+    Raises UnmappedPublishChannel instead of falling back to any default channel.
+    """
+    owner = queue_val(queue_doc, "ownerUid")
+    if not owner:
+        raise UnmappedPublishChannel(
+            "Queue row has no ownerUid, so its YouTube channel cannot be verified. Re-queue it from the Vault."
+        )
+    channel = queue_val(queue_doc, "ytPublishChannel")
+    account = ""
+    if not channel:
+        label = fs_val(doc, "account_label") or canonical_account_label(fs_val(doc, "handle"))
+        handle = fs_val(doc, "account_handle") or fs_val(doc, "handle")
+        source = fs_val(doc, "account_sourceId") or fs_val(doc, "sourceId")
+        account = account_key(account_label=label, account_handle=handle, source_id=source)
+        channel = resolve_publish_channel(
+            account_label=label, account_handle=handle, source_id=source,
+            channel_map=fs_get_channel_map_entry(gcp_token, owner, account),
+        )
+    if not channel:
+        raise UnmappedPublishChannel(unmapped_message(account))
+    # Ownership check: the channel must be one of this user's linked channels.
+    oauth_secret_for_channel(channel, fs_get_channel_registry_entry(gcp_token, owner, channel))
+    return owner, channel
 
 
 def get_token_scopes(access_token: str) -> set[str]:
@@ -826,6 +887,19 @@ def needs_caption_retry(doc: dict) -> bool:
     return not track_id
 
 
+def republish_history_fields(doc: dict, previous_id: str, at: str, is_republish: bool) -> dict:
+    """Keep the earlier video in history when a song is deliberately published again."""
+    if not (is_republish and previous_id):
+        return {}
+    prev = [v.get("stringValue", "") for v in
+            doc.get("fields", {}).get("ytPreviousVideoIds", {}).get("arrayValue", {}).get("values", [])]
+    prev = [v for v in prev if v] + [previous_id]
+    return {
+        "ytPreviousVideoIds": {"arrayValue": {"values": [{"stringValue": v} for v in prev]}},
+        "ytRepublishedAt": {"stringValue": at},
+    }
+
+
 def upload_clip(
     gcp_token: str,
     song_key:  str,
@@ -836,18 +910,25 @@ def upload_clip(
 
     # 1 — Fetch Firestore sunoSongs doc
     doc = fs_get(gcp_token, song_key)
-    publish_channel = resolve_publish_channel_for_doc(doc, queue_doc)
-    print(f"  publish_channel={publish_channel}")
 
     # ── Duplicate-upload guard ────────────────────────────────────────────────
     # If a durable YouTube result already exists, skip to prevent duplicates.
     existing_yt_id, existing_canonical = existing_uploaded_video(doc)
-    if existing_yt_id and dry_run:
+    # A confirmed "publish again" from the Vault carries republishOf=<current video id>.
+    republish_of = queue_val(queue_doc, "republishOf")
+    is_republish = bool(existing_yt_id) and republish_of == existing_yt_id
+    if is_republish:
+        print(f"  republish confirmed in Vault: previous ytVideoId={existing_yt_id}")
+    if existing_yt_id and dry_run and not is_republish:
         # Dry runs must exercise the guard too, but never write or call YouTube.
         print(f"  [DRY RUN] duplicate guard: already uploaded ytVideoId={existing_yt_id}; would skip upload")
         return existing_yt_id
-    if existing_yt_id:
-        yt_token = get_youtube_token(gcp_token, publish_channel)
+
+    owner_uid, publish_channel = resolve_publish_target(doc, queue_doc, gcp_token)
+    print(f"  publish_channel={publish_channel} owner={owner_uid}")
+
+    if existing_yt_id and not is_republish:
+        yt_token = get_youtube_token(gcp_token, publish_channel, owner_uid)
         patch_fields = {
             "ytStatus": {"stringValue": "done"},
             "ytError": {"stringValue": ""},
@@ -895,7 +976,7 @@ def upload_clip(
 
     try:
         # 3 — Get YouTube token
-        yt_token = get_youtube_token(gcp_token, publish_channel)
+        yt_token = get_youtube_token(gcp_token, publish_channel, owner_uid)
 
         # 4 — Download media from GCS
         print("  downloading media from GCS...")
@@ -932,6 +1013,10 @@ def upload_clip(
             "ytPublishedAt":  {"stringValue": done_at},
             "ytError":        {"stringValue": ""},
             "ytErrorAt":      {"stringValue": ""},
+            # Where and how it went out, for the Vault's "already on YouTube" warning.
+            "ytPublishChannel": {"stringValue": publish_channel},
+            "ytPrivacy":      {"stringValue": metadata["status"].get("privacyStatus", "")},
+            **republish_history_fields(doc, existing_yt_id, done_at, is_republish),
             **caption_patch,
         })
         print(f"  Firestore updated: ytVideoId={video_id} → {canonical_url}")

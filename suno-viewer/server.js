@@ -29,6 +29,10 @@ app.disable("x-powered-by");
 // Bearer-hash protected, rate limited, audit logged. Harvest-test and maintenance build routes removed.
 const { createRateLimiter } = require("./token-hash-auth.cjs");
 const { createUploadJobTrigger } = require("./upload-trigger.cjs");
+const publishChannels = require("./publish-channels.cjs");
+const { describePriorPublish } = require("./publish-precheck.cjs");
+const publishDefaults = require("./publish-defaults.cjs");
+const { installYouTubeConnectRoutes } = require("./youtube-connect.cjs");
 {
   app.use(["/api/local-mirror/token", "/api/maintenance/token"], createRateLimiter({ windowMs: 60000, max: 20 }));
 }
@@ -3431,15 +3435,109 @@ function canonicalAccountLabel(rawHandle = "", rawLabel = "") {
   return SUNO_ACCOUNT_LABEL_ALIASES[picked] || SUNO_ACCOUNT_LABEL_ALIASES[handle] || picked;
 }
 
-function resolvePublishChannelFromSongDoc(songDoc) {
+// ── Per-user publish channels, account defaults and publish defaults ─────────
+function fsDocToPlain(doc) {
+  const out = {};
+  for (const [k, v] of Object.entries(doc?.fields || {})) out[k] = fsValueToJs(v);
+  return out;
+}
+
+async function loadUserChannelRegistry(uid, accessToken) {
+  if (!uid) return {};
+  const docs = await fsListCollection(publishChannels.userChannelsPath(uid), accessToken).catch(() => []);
+  return Object.fromEntries(docs.map((d) => [d.name.split("/").pop(), fsDocToPlain(d)]));
+}
+
+async function loadUserChannelMap(uid, accessToken) {
+  if (!uid) return {};
+  const docs = await fsListCollection(publishChannels.userChannelMapPath(uid), accessToken).catch(() => []);
+  return Object.fromEntries(docs.map((d) => [d.name.split("/").pop(), fsString(d, "channel")]).filter(([, c]) => c));
+}
+
+function songAccountCandidates(songDoc) {
   const handle = fsString(songDoc, "handle") || fsString(songDoc, "account_handle");
   const label = canonicalAccountLabel(handle, fsString(songDoc, "account_label"));
-  if (label === "vanessa_secondary") return "vanessa_secondary";
-  if (label === "vanessa_primary") return "vanessa_primary";
   const sourceId = fsString(songDoc, "account_sourceId") || fsString(songDoc, "sourceId");
-  if (sourceId.includes("nessihenize")) return "vanessa_secondary";
-  if (sourceId.includes("unshakableechos2341")) return "vanessa_primary";
-  return "vanessa_primary";
+  return publishChannels.accountCandidates({ label, handle, sourceId });
+}
+
+/** Channel for this user + song: the form's pick, else the user's account default. Never a fallback. */
+async function resolvePublishChannelForUser(uid, songDoc, requested, accessToken, cache = {}) {
+  if (!uid) {
+    return { ok: false, code: "no_user", error: "Sign in with your own account to publish; channels belong to a user." };
+  }
+  cache.registry = cache.registry || (await loadUserChannelRegistry(uid, accessToken));
+  cache.channelMap = cache.channelMap || (await loadUserChannelMap(uid, accessToken));
+  return publishChannels.resolveChannel({
+    candidates: songAccountCandidates(songDoc),
+    channelMap: cache.channelMap,
+    registry: cache.registry,
+    requested,
+  });
+}
+
+async function loadQueueRowsForSong(songKey, accessToken) {
+  const results = await fsRunQuery(
+    {
+      structuredQuery: {
+        from: [{ collectionId: QUEUE_COLLECTION }],
+        where: { fieldFilter: { field: { fieldPath: "songKey" }, op: "EQUAL", value: { stringValue: songKey } } },
+        limit: 20,
+      },
+    },
+    accessToken
+  );
+  return results
+    .filter((r) => r.document)
+    .map((r) => ({ queueId: r.document.name.split("/").pop(), ...fsDocToPlain(r.document) }))
+    .sort((x, y) => String(y.createdAt || "").localeCompare(String(x.createdAt || "")));
+}
+
+async function loadPublishDefaults(uid, accessToken) {
+  const [sysDoc, userDoc] = await Promise.all([
+    fsGetDoc("publishDefaults", "system", accessToken).catch(() => null),
+    uid ? fsGetDoc(`users/${uid}/publishDefaults`, "current", accessToken).catch(() => null) : null,
+  ]);
+  return publishDefaults.effectiveDefaults({ system: fsDocToPlain(sysDoc), user: fsDocToPlain(userDoc) });
+}
+
+async function fsDeleteDoc(docName, accessToken) {
+  const resp = await fetch(`https://firestore.googleapis.com/v1/${docName}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok && resp.status !== 404) throw new Error(`Firestore delete failed: HTTP ${resp.status}`);
+}
+
+async function fsReplaceDoc(docName, fields, accessToken) {
+  // Full overwrite (no updateMask): removed keys really disappear.
+  const resp = await fetch(`https://firestore.googleapis.com/v1/${docName}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ fields }),
+  });
+  if (!resp.ok) throw new Error(`Firestore write failed: HTTP ${resp.status}`);
+  return await resp.json();
+}
+
+async function loadSongsForAccount(account, accessToken) {
+  const seen = new Map();
+  for (const field of ["account_label", "handle"]) {
+    const rows = await fsRunQuery(
+      {
+        structuredQuery: {
+          from: [{ collectionId: SONG_COLLECTION }],
+          where: { fieldFilter: { field: { fieldPath: field }, op: "EQUAL", value: { stringValue: account } } },
+          limit: 5000,
+        },
+      },
+      accessToken
+    );
+    for (const r of rows) {
+      if (r.document) seen.set(r.document.name.split("/").pop(), { songKey: r.document.name.split("/").pop(), ...fsDocToPlain(r.document) });
+    }
+  }
+  return [...seen.values()];
 }
 
 async function loadLatestSourceSong(accessToken) {
@@ -5347,6 +5445,16 @@ app.post("/api/trigger-upload-job", async (_req, res) => {
 });
 
 
+function ytMetaToFields(ytMeta = {}) {
+  const ytFields = {};
+  const str = { title: "ytTitle", description: "ytDescription", tags: "ytTags", privacy: "ytPrivacy", language: "ytLanguage",
+    license: "ytLicense", category: "ytCategory", promptPolicy: "ytPromptPolicy", lyricsPolicy: "ytLyricsPolicy" };
+  for (const [k, f] of Object.entries(str)) if (ytMeta[k] !== undefined) ytFields[f] = { stringValue: String(ytMeta[k]) };
+  if (ytMeta.alteredContent !== undefined) ytFields.ytAlteredContent = { booleanValue: Boolean(ytMeta.alteredContent) };
+  if (ytMeta.shortsRemixing !== undefined) ytFields.ytShortsRemixing = { booleanValue: Boolean(ytMeta.shortsRemixing) };
+  return ytFields;
+}
+
 app.post("/api/queue-for-youtube", async (req, res) => {
   try {
     const accessToken = await getAccessToken();
@@ -5361,8 +5469,11 @@ app.post("/api/queue-for-youtube", async (req, res) => {
       )
     ) return;
 
+    const uid = context.user?.uid || "";
     const songKey = String(req.body?.songKey || "").trim();
     const retryExistingError = Boolean(req.body?.retryExistingError);
+    const confirmRepublish = Boolean(req.body?.confirmRepublish);
+    const requestedChannel = String(req.body?.channel || "").trim();
     if (!songKey) {
       return res.status(400).json({ ok: false, error: "songKey is required" });
     }
@@ -5377,78 +5488,66 @@ app.post("/api/queue-for-youtube", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Song does not have a GCS video path" });
     }
 
-    if (hasPublishedResult(songDoc)) {
+    // Channel must be one of this user's linked channels; no silent fallback.
+    const target = await resolvePublishChannelForUser(uid, songDoc, requestedChannel, accessToken);
+    if (!target.ok) {
+      return res.status(409).json({ ok: false, code: target.code, error: target.error, account: target.account || "" });
+    }
+
+    const rows = await loadQueueRowsForSong(songKey, accessToken);
+    const prior = describePriorPublish({
+      song: fsDocToPlain(songDoc),
+      queueRows: rows,
+      chosenChannel: target.channel,
+    });
+
+    // Already waiting in the queue: never add a second row.
+    if (prior.state === "queued" || prior.state === "uploading") {
       return res.json({
-        ok: true,
-        created: false,
-        shouldTriggerUpload: false,
-        status: "done",
-        queueId: "",
-        ytVideoId: fsString(songDoc, "ytVideoId"),
-        ytCanonicalUrl: fsString(songDoc, "ytCanonicalUrl"),
-        errorMsg: "",
+        ok: true, created: false, shouldTriggerUpload: false, status: prior.state,
+        queueId: prior.details?.queueId || "", ytVideoId: "", ytCanonicalUrl: "", errorMsg: "", prior,
       });
     }
 
-    const existing = await findExistingQueueDoc(songKey, accessToken);
-    if (existing) {
-      const existingStatus = fsString(existing, "status") || "queued";
-      if (existingStatus === "error" && retryExistingError) {
-        const now = new Date().toISOString();
-        await fsPatchDoc(
-          existing.name,
-          {
-            status: { stringValue: "queued" },
-            queuedAt: { stringValue: now },
-            retryCount: { integerValue: 0 },
-            errorMsg: { stringValue: "" },
-            startedAt: { stringValue: "" },
-            uploadedAt: { stringValue: "" },
-            ytVideoId: { stringValue: "" },
-          },
-          accessToken
-        );
-        return res.json({
-          ok: true,
-          created: false,
-          shouldTriggerUpload: true,
-          status: "queued",
-          queueId: existing.name?.split("/").pop() || "",
-          ytVideoId: "",
-          ytCanonicalUrl: fsString(songDoc, "ytCanonicalUrl"),
-          errorMsg: "",
-        });
-      }
+    const errorRow = rows.find((r) => r.status === "error");
+    if (prior.state === "none" && errorRow && retryExistingError) {
+      const now = new Date().toISOString();
+      await fsPatchDoc(
+        fsDocName(QUEUE_COLLECTION, errorRow.queueId),
+        {
+          status: { stringValue: "queued" },
+          queuedAt: { stringValue: now },
+          retryCount: { integerValue: 0 },
+          errorMsg: { stringValue: "" },
+          startedAt: { stringValue: "" },
+          uploadedAt: { stringValue: "" },
+          ytVideoId: { stringValue: "" },
+          ownerUid: { stringValue: uid },
+          ytPublishChannel: { stringValue: target.channel },
+        },
+        accessToken
+      );
       return res.json({
-        ok: true,
-        created: false,
-        shouldTriggerUpload: false,
-        status: existingStatus,
-        queueId: existing.name?.split("/").pop() || "",
-        ytVideoId: fsString(existing, "ytVideoId") || fsString(songDoc, "ytVideoId"),
-        ytCanonicalUrl: fsString(songDoc, "ytCanonicalUrl"),
-        errorMsg: fsString(existing, "errorMsg"),
+        ok: true, created: false, shouldTriggerUpload: true, status: "queued", queueId: errorRow.queueId,
+        ytVideoId: "", ytCanonicalUrl: "", errorMsg: "", channel: target.channel,
+      });
+    }
+    if (prior.state === "none" && errorRow) {
+      return res.json({
+        ok: true, created: false, shouldTriggerUpload: false, status: "error", queueId: errorRow.queueId,
+        ytVideoId: "", ytCanonicalUrl: "", errorMsg: errorRow.errorMsg || "",
+      });
+    }
+
+    // Already on YouTube: warn first; only a confirmed "publish again" goes ahead.
+    if (prior.state === "on_youtube" && !confirmRepublish) {
+      return res.json({
+        ok: true, created: false, shouldTriggerUpload: false, status: "done", needsConfirm: true, queueId: "",
+        ytVideoId: prior.details.ytVideoId, ytCanonicalUrl: prior.details.url, errorMsg: "", prior,
       });
     }
 
     const now = new Date().toISOString();
-    const publishChannel = resolvePublishChannelFromSongDoc(songDoc);
-
-    // Optional YouTube metadata overrides sent from the Vault UI
-    const ytMeta = req.body?.ytMeta || {};
-    const ytFields = {};
-    if (ytMeta.title         !== undefined) ytFields.ytTitle          = { stringValue: String(ytMeta.title) };
-    if (ytMeta.description   !== undefined) ytFields.ytDescription    = { stringValue: String(ytMeta.description) };
-    if (ytMeta.tags          !== undefined) ytFields.ytTags           = { stringValue: String(ytMeta.tags) };
-    if (ytMeta.privacy       !== undefined) ytFields.ytPrivacy        = { stringValue: String(ytMeta.privacy) };
-    if (ytMeta.language      !== undefined) ytFields.ytLanguage       = { stringValue: String(ytMeta.language) };
-    if (ytMeta.license       !== undefined) ytFields.ytLicense        = { stringValue: String(ytMeta.license) };
-    if (ytMeta.category      !== undefined) ytFields.ytCategory       = { stringValue: String(ytMeta.category) };
-    if (ytMeta.promptPolicy  !== undefined) ytFields.ytPromptPolicy   = { stringValue: String(ytMeta.promptPolicy) };
-    if (ytMeta.lyricsPolicy  !== undefined) ytFields.ytLyricsPolicy   = { stringValue: String(ytMeta.lyricsPolicy) };
-    if (ytMeta.alteredContent !== undefined) ytFields.ytAlteredContent = { booleanValue: Boolean(ytMeta.alteredContent) };
-    if (ytMeta.shortsRemixing !== undefined) ytFields.ytShortsRemixing = { booleanValue: Boolean(ytMeta.shortsRemixing) };
-
     const created = await fsCreateDoc(
       QUEUE_COLLECTION,
       {
@@ -5459,8 +5558,10 @@ app.post("/api/queue-for-youtube", async (req, res) => {
         retryCount:    { integerValue: 0 },
         requestedFrom: { stringValue: "viewer" },
         gcsVideoUrl:   { stringValue: gcsVideoUrl },
-        ytPublishChannel: { stringValue: publishChannel },
-        ...ytFields,
+        ownerUid:      { stringValue: uid },
+        ytPublishChannel: { stringValue: target.channel },
+        ...(prior.state === "on_youtube" ? { republishOf: { stringValue: prior.details.ytVideoId } } : {}),
+        ...ytMetaToFields(req.body?.ytMeta || {}),
       },
       accessToken
     );
@@ -5474,6 +5575,8 @@ app.post("/api/queue-for-youtube", async (req, res) => {
       ytVideoId: "",
       ytCanonicalUrl: "",
       errorMsg: "",
+      channel: target.channel,
+      republish: prior.state === "on_youtube",
     });
   } catch (e) {
     return res
@@ -5481,6 +5584,162 @@ app.post("/api/queue-for-youtube", async (req, res) => {
       .json({ ok: false, error: `queue-for-youtube failed: ${e?.message || e}` });
   }
 });
+
+// Read-only: what would happen if these songs were published to this channel.
+app.post("/api/publish/precheck", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+    const uid = context.user?.uid || "";
+    const songKeys = Array.isArray(req.body?.songKeys)
+      ? [...new Set(req.body.songKeys.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 100)
+      : [];
+    if (songKeys.length === 0) return res.status(400).json({ ok: false, error: "songKeys is required" });
+    const requested = String(req.body?.channel || "").trim();
+    const cache = {};
+    const results = {};
+    for (const songKey of songKeys) {
+      const songDoc = await fsGetDoc(SONG_COLLECTION, songKey, accessToken);
+      if (!songDoc) { results[songKey] = { state: "missing" }; continue; }
+      const target = await resolvePublishChannelForUser(uid, songDoc, requested, accessToken, cache);
+      const names = Object.fromEntries(Object.entries(cache.registry || {}).map(([k, v]) => [k, v.name || k]));
+      const prior = describePriorPublish({
+        song: fsDocToPlain(songDoc),
+        queueRows: await loadQueueRowsForSong(songKey, accessToken),
+        chosenChannel: target.channel || "",
+        channelNames: names,
+      });
+      results[songKey] = { ...prior, channel: target.ok ? { key: target.channel, name: target.channelName } : null,
+        blocked: target.ok ? null : { code: target.code, error: target.error } };
+    }
+    return res.json({ ok: true, results });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `publish precheck failed: ${e?.message || e}` });
+  }
+});
+
+// The signed-in user's publish setup: linked channels (no token refs), account defaults, publish defaults.
+app.get("/api/publish/settings", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+    const uid = context.user?.uid || "";
+    const [registry, accountDefaults, defaults] = await Promise.all([
+      loadUserChannelRegistry(uid, accessToken),
+      loadUserChannelMap(uid, accessToken),
+      loadPublishDefaults(uid, accessToken),
+    ]);
+    return res.json({
+      ok: true,
+      channels: publishChannels.listChannels(registry),
+      accountDefaults,
+      defaults,
+      batchHiddenFields: publishDefaults.BATCH_HIDDEN_FIELDS,
+      canEditSystemDefaults: Boolean(context.platformAdmin),
+      connectAvailable: false,
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `publish settings failed: ${e?.message || e}` });
+  }
+});
+
+// Save the user's changes as their own defaults (only what differs from the system set).
+app.put("/api/publish/defaults", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+    const uid = context.user?.uid || "";
+    if (!uid) return res.status(401).json({ ok: false, error: "Sign in to save your defaults." });
+    const current = await loadPublishDefaults(uid, accessToken);
+    const overrides = publishDefaults.userOverrides(req.body?.defaults || {}, current.system);
+    await fsReplaceDoc(fsDocName(`users/${uid}/publishDefaults`, "current"), {
+      ...publishDefaults.toFirestoreFields(overrides),
+      updatedAt: { stringValue: new Date().toISOString() },
+    }, accessToken);
+    return res.json({ ok: true, defaults: await loadPublishDefaults(uid, accessToken) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `save defaults failed: ${e?.message || e}` });
+  }
+});
+
+// "Return to default": drop the user's saved defaults so the system set applies.
+app.delete("/api/publish/defaults", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+    const uid = context.user?.uid || "";
+    if (!uid) return res.status(401).json({ ok: false, error: "Sign in to reset your defaults." });
+    await fsDeleteDoc(fsDocName(`users/${uid}/publishDefaults`, "current"), accessToken);
+    return res.json({ ok: true, defaults: await loadPublishDefaults(uid, accessToken) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `reset defaults failed: ${e?.message || e}` });
+  }
+});
+
+// Platform admin: the system default set everyone starts from.
+app.put("/api/publish/defaults/system", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requirePlatformAdmin(context, res)) return;
+    const clean = { ...publishDefaults.SYSTEM_FALLBACK, ...publishDefaults.sanitize(req.body?.defaults || {}) };
+    await fsReplaceDoc(fsDocName("publishDefaults", "system"), {
+      ...publishDefaults.toFirestoreFields(clean),
+      updatedAt: { stringValue: new Date().toISOString() },
+      updatedBy: { stringValue: context.user?.uid || "" },
+    }, accessToken);
+    return res.json({ ok: true, defaults: await loadPublishDefaults(context.user?.uid || "", accessToken) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `save system defaults failed: ${e?.message || e}` });
+  }
+});
+
+// Set a Suno account's default channel for this user. Moving it resets that
+// account's published state (DEV-57) after an explicit confirm; old videos stay in history.
+app.put("/api/publish/account-channel/:account", async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+    const context = await resolveRequestContext(req, accessToken);
+    if (!requireVaultAccess(context, res)) return;
+    const uid = context.user?.uid || "";
+    if (!uid) return res.status(401).json({ ok: false, error: "Sign in to change channels." });
+    const account = String(req.params.account || "").trim();
+    const channel = String(req.body?.channel || "").trim();
+    if (!publishChannels.validateChannelKey(account)) return res.status(400).json({ ok: false, error: "Invalid account" });
+    const registry = await loadUserChannelRegistry(uid, accessToken);
+    if (channel && !registry[channel]) {
+      return res.status(403).json({ ok: false, error: "That channel is not one of your linked channels." });
+    }
+    const map = await loadUserChannelMap(uid, accessToken);
+    const oldChannel = map[account] || "";
+    const songs = oldChannel && oldChannel !== channel ? await loadSongsForAccount(account, accessToken) : [];
+    const plan = publishChannels.planChannelChange({ account, oldChannel, newChannel: channel, songs, by: uid });
+    if (plan.resets.length > 0 && !req.body?.confirmReset) {
+      return res.status(409).json({
+        ok: false, needsConfirm: true, affected: plan.resets.length,
+        error: `${plan.resets.length} song(s) from ${account} are marked as on YouTube via ${oldChannel}. Changing the channel resets them so they can be published again; their old video IDs are kept in history.`,
+      });
+    }
+    const docName = fsDocName(publishChannels.userChannelMapPath(uid), account);
+    if (channel) {
+      await fsReplaceDoc(docName, { channel: { stringValue: channel }, updatedAt: { stringValue: new Date().toISOString() } }, accessToken);
+    } else {
+      await fsDeleteDoc(docName, accessToken);
+    }
+    for (const r of plan.resets) {
+      await fsPatchDoc(fsDocName(SONG_COLLECTION, r.songKey), r.fields, accessToken);
+    }
+    return res.json({ ok: true, account, channel, reset: plan.resets.length });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `account channel update failed: ${e?.message || e}` });
+  }
+});
+
+installYouTubeConnectRoutes(app);
 
 
 // Legacy compatibility route.

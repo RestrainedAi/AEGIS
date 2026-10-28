@@ -88,3 +88,18 @@ test("YouTube connect is a clear 501 plug-in point for now", async () => {
     server.close();
   }
 });
+
+test("publishes from before linked channels are matched through the user's account map", () => {
+
+  const prior = describePriorPublish({
+    song: { ytVideoId: "V", ytPublishedAt: "2026-10-28T17:47:25Z" },
+    queueRows: [{ status: "done", ytVideoId: "V", ytPublishChannel: "vanessa_primary", ytPrivacy: "private" }],
+    chosenChannel: "sundrop_cloud",
+    channelNames: { sundrop_cloud: "sundrop cloud" },
+    legacyChannelMap: { vanessa_primary: "sundrop_cloud" },
+  });
+  assert.equal(prior.sameChannel, true);
+  assert.equal(prior.details.channel, "sundrop_cloud");
+  assert.equal(prior.details.channelName, "sundrop cloud");
+  assert.match(prior.message, /on this channel/);
+});

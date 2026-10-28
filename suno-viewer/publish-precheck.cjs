@@ -11,13 +11,16 @@ function pick(obj, key) {
  * @param queueRows    plain queue rows for the song, newest first
  * @param chosenChannel channel picked in the Publish form
  */
-function describePriorPublish({ song = {}, queueRows = [], chosenChannel = "", channelNames = {} } = {}) {
+function describePriorPublish({ song = {}, queueRows = [], chosenChannel = "", channelNames = {}, legacyChannelMap = {} } = {}) {
   const active = queueRows.find((r) => ["queued", "uploading", "new"].includes(pick(r, "status")));
   const lastDone = queueRows.find((r) => pick(r, "status") === "done" && pick(r, "ytVideoId"));
+  // Rows written before linked channels existed stored the Suno account name (e.g. "vanessa_primary")
+  // as the channel. Translate those through the user's own account -> channel map.
+  const norm = (k) => (k && !channelNames[k] && legacyChannelMap[k] ? legacyChannelMap[k] : k);
   const name = (k) => (k ? channelNames[k] || k : "");
 
   if (active) {
-    const ch = pick(active, "ytPublishChannel");
+    const ch = norm(pick(active, "ytPublishChannel"));
     return {
       state: pick(active, "status") === "uploading" ? "uploading" : "queued",
       canProceed: false, // it will go out once; publishing again now would duplicate it
@@ -36,7 +39,7 @@ function describePriorPublish({ song = {}, queueRows = [], chosenChannel = "", c
   const videoId = pick(song, "ytVideoId") || pick(lastDone, "ytVideoId");
   if (!videoId) return { state: "none", canProceed: true, sameChannel: false, details: null, message: "" };
 
-  const channel = pick(song, "ytPublishChannel") || pick(lastDone, "ytPublishChannel");
+  const channel = norm(pick(song, "ytPublishChannel") || pick(lastDone, "ytPublishChannel"));
   const sameChannel = !channel || !chosenChannel || channel === chosenChannel;
   return {
     state: "on_youtube",

@@ -3454,6 +3454,17 @@ async function loadUserChannelMap(uid, accessToken) {
   return Object.fromEntries(docs.map((d) => [d.name.split("/").pop(), fsString(d, "channel")]).filter(([, c]) => c));
 }
 
+async function priorPublishNaming(uid, accessToken) {
+  const [registry, channelMap] = await Promise.all([
+    loadUserChannelRegistry(uid, accessToken),
+    loadUserChannelMap(uid, accessToken),
+  ]);
+  return {
+    channelNames: Object.fromEntries(Object.entries(registry || {}).map(([k, v]) => [k, v.name || k])),
+    legacyChannelMap: channelMap || {},
+  };
+}
+
 function songAccountCandidates(songDoc) {
   const handle = fsString(songDoc, "handle") || fsString(songDoc, "account_handle");
   const label = canonicalAccountLabel(handle, fsString(songDoc, "account_label"));
@@ -5499,6 +5510,7 @@ app.post("/api/queue-for-youtube", async (req, res) => {
       song: fsDocToPlain(songDoc),
       queueRows: rows,
       chosenChannel: target.channel,
+      ...(await priorPublishNaming(uid, accessToken)),
     });
 
     // Already waiting in the queue: never add a second row.
@@ -5609,6 +5621,7 @@ app.post("/api/publish/precheck", async (req, res) => {
         queueRows: await loadQueueRowsForSong(songKey, accessToken),
         chosenChannel: target.channel || "",
         channelNames: names,
+        legacyChannelMap: cache.channelMap || {},
       });
       results[songKey] = { ...prior, channel: target.ok ? { key: target.channel, name: target.channelName } : null,
         blocked: target.ok ? null : { code: target.code, error: target.error } };

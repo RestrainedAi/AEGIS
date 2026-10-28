@@ -15,6 +15,7 @@ Usage:
 """
 import argparse
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -60,11 +61,21 @@ def plan(uid: str) -> list[tuple[str, dict]]:
     return out
 
 
-def create_only(token: str, path: str, fields: dict) -> str:
+def get_token() -> tuple[str, dict]:
+    """Cloud metadata token when running on GCP; otherwise the operator's gcloud login."""
+    try:
+        return up.get_gcp_token(), {}
+    except Exception:
+        tok = subprocess.check_output("gcloud auth print-access-token", shell=True, text=True).strip()
+        return tok, {"x-goog-user-project": up.PROJECT}
+
+
+def create_only(token: str, path: str, fields: dict, extra_headers: dict | None = None) -> str:
     url = (f"https://firestore.googleapis.com/v1/projects/{up.PROJECT}/databases/{up.DATABASE}"
            f"/documents/{path}?currentDocument.exists=false")
     req = urllib.request.Request(url, data=json.dumps({"fields": fields}).encode(), method="PATCH",
-                                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                                          **(extra_headers or {})})
     try:
         urllib.request.urlopen(req, timeout=15).read()
         return "created"
@@ -80,11 +91,11 @@ def main():
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     steps = plan(args.uid)
-    token = up.get_gcp_token() if args.apply else ""
+    token, headers = get_token() if args.apply else ("", {})
     for path, fields in steps:
         summary = {k: list(v.values())[0] for k, v in fields.items()}
         if args.apply:
-            print(f"{create_only(token, path, fields):28s} {path}")
+            print(f"{create_only(token, path, fields, headers):28s} {path}")
         else:
             print(f"[dry-run] would create {path} {summary}")
     if not args.apply:

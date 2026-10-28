@@ -28,6 +28,7 @@ app.disable("x-powered-by");
 // S4: token routes still used by the local receiver (local-mirror) and maintenance tooling.
 // Bearer-hash protected, rate limited, audit logged. Harvest-test and maintenance build routes removed.
 const { createRateLimiter } = require("./token-hash-auth.cjs");
+const { createUploadJobTrigger } = require("./upload-trigger.cjs");
 {
   app.use(["/api/local-mirror/token", "/api/maintenance/token"], createRateLimiter({ windowMs: 60000, max: 20 }));
 }
@@ -70,6 +71,7 @@ const EXPORT_WRITER_VERSION = "2026-05-15-direct-manifest-v3";
 const PROJECT = "stable-framing-482501-t9";
 const DATABASE = "(default)";
 const QUEUE_COLLECTION = "ytUploadQueue";
+const uploadJobTrigger = createUploadJobTrigger({ project: PROJECT, region: "us-central1", jobName: "yt-upload-job" });
 const SONG_COLLECTION = "sunoSongs";
 const SOURCES_COLLECTION = "sources";
 const SUNO_ACCOUNT_LABEL_ALIASES = {
@@ -5325,38 +5327,18 @@ app.post("/api/trigger-upload-job", async (_req, res) => {
       )
     ) return;
 
-    // Cloud Run Jobs: run an execution
-    // POST https://run.googleapis.com/v2/projects/{project}/locations/{region}/jobs/{job}:run
-    const region = "us-central1";
-    const jobName = "yt-upload-job";
-    const url = (
-      `https://run.googleapis.com/v2/projects/${PROJECT}/locations/${region}` +
-      `/jobs/${jobName}:run`
-    );
-
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      return res.status(502).json({
-        ok: false,
-        error: `Cloud Run trigger failed: HTTP ${resp.status}`,
-        detail: text.slice(0, 400),
-      });
+    // One job run per burst of publish clicks: reuse an in-flight or running
+    // execution instead of starting parallel runs (see upload-trigger.cjs).
+    let result;
+    try {
+      result = await uploadJobTrigger.trigger(accessToken);
+    } catch (err) {
+      if (err?.status) {
+        return res.status(502).json({ ok: false, error: err.message, detail: err.detail || "" });
+      }
+      throw err;
     }
-
-    const data = await resp.json();
-    // data.name is the execution resource name e.g. ".../executions/yt-upload-job-xxxxx"
-    const executionName = data.name?.split("/").pop() || "";
-
-    return res.json({ ok: true, execution: executionName });
+    return res.json({ ok: true, execution: result.execution, reused: result.reused, reason: result.reason });
   } catch (e) {
     return res
       .status(500)

@@ -842,7 +842,11 @@ def upload_clip(
     # ── Duplicate-upload guard ────────────────────────────────────────────────
     # If a durable YouTube result already exists, skip to prevent duplicates.
     existing_yt_id, existing_canonical = existing_uploaded_video(doc)
-    if existing_yt_id and not dry_run:
+    if existing_yt_id and dry_run:
+        # Dry runs must exercise the guard too, but never write or call YouTube.
+        print(f"  [DRY RUN] duplicate guard: already uploaded ytVideoId={existing_yt_id}; would skip upload")
+        return existing_yt_id
+    if existing_yt_id:
         yt_token = get_youtube_token(gcp_token, publish_channel)
         patch_fields = {
             "ytStatus": {"stringValue": "done"},

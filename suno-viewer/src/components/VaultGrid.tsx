@@ -8,7 +8,7 @@ import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
 import { issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity as songHasVaultIdentity, type IssueTag } from '../lib/issue-tags'
 import { createCsvStreamParser } from '../lib/csv-stream'
-import { defaultChannelForAccount, priorPublishLines, queueMetaForRequest, type PriorPublish, type PublishChannelOption } from '../lib/publish-ui'
+import { defaultChannelForAccount, isOnYouTube, youtubeStateLabel, priorPublishLines, queueMetaForRequest, type PriorPublish, type PublishChannelOption } from '../lib/publish-ui'
 import { TITLE_MAX, applyTitleEdits, createTitleEditor, readTitleResponse, titleSearchTerms, titleSourceTag, validateTitleInput, type TitleEdit, type TitleSaveResult } from '../lib/title-edit'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
@@ -788,14 +788,17 @@ function initialYouTubeState(song: SunoSong): YouTubePublishState | null {
   }
 }
 
+// "On YouTube" means a real YouTube video ID exists. A queue row marked done without
+// one, or a song that is live on Suno, is not "on YouTube".
 function isPublishedState(state?: YouTubePublishState | null) {
-  return Boolean(state && (state.status === 'done' || state.ytVideoId || state.ytCanonicalUrl))
+  return isOnYouTube(state)
 }
 
 function isPublishBlocked(song: SunoSong, state?: YouTubePublishState | null) {
   if (!song.songKey || songIsRemoved(song)) return true
   if (!state) return false
-  return state.status === 'queued' || state.status === 'uploading' || isPublishedState(state)
+  // Songs already on YouTube stay selectable: publishing them again goes through the warning dialog.
+  return state.status === 'queued' || state.status === 'uploading'
 }
 
 // ── Job banner ────────────────────────────────────────────────────────────────
@@ -1413,23 +1416,16 @@ function YtBadge({ state }: { state?: YouTubePublishState }) {
         target="_blank"
         rel="noopener noreferrer"
         style={{ color: '#ff8a8a', fontSize: 11, textDecoration: 'none' }}
-        title={state.ytPublishedAt ? `Published ${fmtDateTime(state.ytPublishedAt)}` : 'View on YouTube'}
+        title={state.ytPublishedAt ? `On YouTube since ${fmtDateTime(state.ytPublishedAt)}` : 'Open on YouTube'}
       >
-        Published
+        On YouTube ↗
       </a>
     )
   }
 
-  const label: Record<string, string> = {
-    queued: 'Queued for upload',
-    uploading: 'Upload running',
-    error: 'Publish failed',
-    done: 'Published',
-  }
-
   return (
     <span style={{ fontSize: 11, color: state.status === 'error' ? '#ff9a9a' : '#888' }}>
-      {label[state.status] || state.status}
+      {youtubeStateLabel(state)}
     </span>
   )
 }
@@ -4407,7 +4403,7 @@ export default function VaultGrid() {
     if (publishFilter !== 'all') {
       chips.push({
         key: 'publish',
-        label: publishFilter === 'published' ? 'Publish: done' : 'Publish: not done',
+        label: publishFilter === 'published' ? 'On YouTube' : 'Not on YouTube',
         clear: () => {
           setPublishFilter('all')
           setPage(1)
@@ -5454,9 +5450,9 @@ export default function VaultGrid() {
           onChange={e => { setPublishFilter(e.target.value as typeof publishFilter); setPage(1) }}
           style={selStyle}
         >
-          <option value="all">All publish states</option>
-          <option value="published">Published</option>
-          <option value="unpublished">Not published</option>
+          <option value="all">All YouTube states</option>
+          <option value="published">On YouTube</option>
+          <option value="unpublished">Not on YouTube</option>
         </select>
         <select
           value={sort}
@@ -5680,7 +5676,7 @@ export default function VaultGrid() {
                 { key: 'publish_ready', label: 'Publish ready' },
                 { key: 'has_lyrics', label: 'Has lyrics' },
                 { key: 'missing_lyrics', label: 'Missing lyrics' },
-                { key: 'published', label: 'Published' },
+                { key: 'published', label: 'On YouTube' },
                 { key: 'has_issues', label: 'Has issues' },
               ].map(preset => (
                 <button

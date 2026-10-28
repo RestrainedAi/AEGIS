@@ -255,6 +255,10 @@ function createTitleOverrides({ adapter, ttlMs = 15000, now = () => Date.now(), 
         if (existing && existing.source === "user" && cleanTitle(existing.title) === title) {
           return { changed: false, songKey, title, titleSource: "user", previousTitle: existing.previousTitle || "" };
         }
+        // Saving a real Suno title unchanged is a no-op: no override, so later Suno renames still show.
+        if ((!existing || existing.source !== "user") && auto && auto.titleSource === "suno" && auto.title === title) {
+          return { changed: false, songKey, title, titleSource: "suno", previousTitle: "", canRevert: false };
+        }
         raw.overrides[songKey] = {
           title,
           source: "user",

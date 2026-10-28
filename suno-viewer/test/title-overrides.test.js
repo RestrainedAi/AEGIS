@@ -226,3 +226,19 @@ test("committed seed has the 26 old-file titles", () => {
   assert.equal(entries.length, 26);
   assert.ok(entries.every((e) => e.source === "old_file" && t.validateTitle(e.title) === ""));
 });
+
+test("saving a real Suno title unchanged creates no override", async () => {
+  const adapter = memoryAdapter(seed());
+  const titles = t.createTitleOverrides({ adapter, log: quiet });
+  const buf = Buffer.from(CSV);
+  const writesBefore = adapter.state.writes;
+  const res = await titles.setTitle({ songKey: "suno1", change: { title: " Real Suno Title " }, catalogBuffer: buf });
+  assert.equal(res.changed, false);
+  assert.equal(res.title, "Real Suno Title");
+  assert.equal(res.titleSource, "suno");
+  assert.equal(adapter.state.writes, writesBefore);
+  assert.equal(adapter.state.data.overrides.suno1.source, "old_file");
+  const guess = await titles.setTitle({ songKey: "old1", change: { title: "Fever Dream" }, catalogBuffer: buf });
+  assert.equal(guess.changed, true, "confirming a best guess still saves it");
+  assert.equal(guess.titleSource, "user");
+});

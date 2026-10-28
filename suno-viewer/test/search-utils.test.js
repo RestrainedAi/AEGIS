@@ -81,3 +81,14 @@ test("getSearchMatchSummary matches normalized punctuation-heavy titles", () => 
   assert.equal(summary.fields[0], "Title");
   assert.match(summary.excerpt, /BEGIN SONIC WEAPON/i);
 });
+
+test("lyric search ignores songwriting metadata lines like Title: and Vibe:", () => {
+  const { stripLyricMetadata } = require("../search-utils");
+  const lyrics = "Title: Connection Lost (Participant Observer) Vibe: Industrial \\n\\n(Verse 1) Pack the bags\\nWe start from scratch";
+  assert.equal(getSearchMatchSummary({ title: "Connection Lost", lyrics }, "Title from"), null);
+  const real = getSearchMatchSummary({ title: "Connection Lost", lyrics }, "start from scratch");
+  assert.ok(real && real.fields.includes("Lyrics"));
+  assert.ok(!stripLyricMetadata(lyrics).includes("Title:"));
+  const mid = "intro notes\nTitle: Something\nStyle: punk\nreal words here";
+  assert.equal(getSearchMatchSummary({ title: "X", lyrics: mid }, "punk"), null);
+});

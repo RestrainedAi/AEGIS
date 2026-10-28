@@ -42,6 +42,13 @@ const normalizeSearchText = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+// Songwriting notes often start lyrics with header lines such as 'Title: X Vibe: Y'.
+// Those are metadata, not sung words, so search ignores them.
+const LYRIC_METADATA_LINE = /^[ \t]*(?:title|vibe|style|styles|genre|mood|tempo|bpm|key)[ \t]*:.*$/gim
+export const stripLyricMetadata = (value: string) => {
+  return String(value || '').replace(/\\n/g, '\n').replace(LYRIC_METADATA_LINE, '').trim()
+}
+
 const tokenizeSearch = (value: string) =>
   normalizeSearchText(value)
     .split(' ')
@@ -179,7 +186,7 @@ export const getSearchMatchSummary = (document: SearchDocument, rawQuery: string
     },
     {
       label: 'Lyrics',
-      values: document.lyrics ? [document.lyrics] : [],
+      values: document.lyrics ? [stripLyricMetadata(document.lyrics)] : [],
       excerptPriority: 4,
       containsScore: 220,
       startsWithScore: 280,

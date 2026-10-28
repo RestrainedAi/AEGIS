@@ -39,6 +39,25 @@ _BRACKETED_RE = re.compile(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|<[^>]*>|\*[^*]*\*")
 # "Guitar: low-gain, palm-muted" style production notes.
 _NOTE_RE = re.compile(r"^[A-Za-z][A-Za-z /&+'-]{0,30}:\s")
 
+# Cautious "Title from lyrics" (matches title-overrides.cjs): skip lines that are clearly not
+# sung lyrics and use the first real lyric line below them; otherwise stay Untitled.
+_HEADING_RE = re.compile(r"^#+")
+_LABEL_RE = re.compile(r"^(?:(?:the|full|final|song|new)\s+)?(?:lyrics?|song|title|track|untitled|chorus|verse|intro|outro|hook|bridge)(?:\s+(?:lyrics?|below|here))?$", re.I)
+_FILLER_RE = re.compile(r"^(?:(?:now|so|ok(?:ay)?|and)[\s,]+)?(?:(?:the|your|my|full|final)\s+)*(?:song|lyrics|track)s?$", re.I)
+_CHATTER_RE = re.compile(r"^(?:here(?:'s|\u2019s|\s+is|\s+are)|understood|below\s+is|as\s+requested|great\s+question|absolutely|certainly|of\s+course|got\s+it|sure|okay|ok)\b", re.I)
+_COUNT_RE = re.compile(r"\b\d[\d,.]*\s*-?\s*(?:characters?|chars?)\b|\bcharacter\s+(?:count|limit)\b", re.I)
+
+
+def is_junk_lyric_line(line, limit=LYRIC_TITLE_MAX):
+    if len(line) > limit:
+        return True
+    letters = len(re.findall(r"[^\W\d_]", line))
+    visible = len(re.sub(r"\s+", "", line))
+    alnum = len(re.findall(r"[^\W_]", line))
+    if letters < 2 or alnum / visible < 0.6:
+        return True
+    return bool(_LABEL_RE.match(line) or _FILLER_RE.match(line) or _CHATTER_RE.match(line) or _COUNT_RE.search(line))
+
 
 def split_lyric_lines(lyrics):
     text = str(lyrics or "").replace("\\r\\n", "\n").replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
@@ -56,6 +75,8 @@ def pick_lyric_title(lyrics, limit=LYRIC_TITLE_MAX):
         line = raw.strip()
         if not line:
             continue
+        if _HEADING_RE.match(line):
+            continue
         # Lines carrying an unbalanced bracket are fragments of a production note.
         if line.count("[") != line.count("]") or line.count("(") != line.count(")"):
             continue
@@ -68,9 +89,8 @@ def pick_lyric_title(lyrics, limit=LYRIC_TITLE_MAX):
             continue
         if _SECTION_RE.match(line) or _NOTE_RE.match(line):
             continue
-        if len(line) > limit:
-            cut = line[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-")
-            line = (cut or line[:limit]) + "…"
+        if is_junk_lyric_line(line, limit):
+            continue
         return line
     return ""
 

@@ -28,10 +28,9 @@ class LyricTitleTest(unittest.TestCase):
         self.assertEqual(t.pick_lyric_title(""), "")
         self.assertEqual(t.pick_lyric_title("[Instrumental]\n[Outro]\n..."), "")
 
-    def test_long_line_cut_on_word(self):
-        title = t.pick_lyric_title("word " * 40)
-        self.assertLessEqual(len(title), t.LYRIC_TITLE_MAX + 1)
-        self.assertTrue(title.endswith("…"))
+    def test_long_line_skipped(self):
+        self.assertEqual(t.pick_lyric_title("word " * 40), "")
+        self.assertEqual(t.pick_lyric_title("word " * 40 + "\nShort line"), "Short line")
 
     def test_shared_cases_match_js(self):
         with open(os.path.join(HERE, "fixtures", "lyric_title_cases.json"), encoding="utf-8") as fh:

@@ -137,3 +137,22 @@ test("Vault grid search uses titleSearchTerms", () => {
   assert.match(grid, /title: titleTerms\.title,/);
   assert.match(grid, /\.\.\.titleTerms\.tags\]/);
 });
+test("cautious lyric guess: junk lines are skipped, real line keeps the tag, all-junk stays Untitled", () => {
+  const ui = loadTs("src/lib/title-edit.ts");
+  const search = require("../search-utils");
+  const t = require("../title-overrides.cjs");
+  const picked = t.resolveTitle("", "## Opening Invocation\nHere is your 5,000-character song:\nLyrics\nCold rain on the window", null);
+  assert.deepEqual(picked, { title: "Cold rain on the window", titleSource: "lyrics" });
+  const doc = song => { const s = ui.titleSearchTerms(song); return { title: s.title, account: [], styles: [], tags: s.tags, lyrics: "" }; };
+  const song = { songKey: "c", ...picked };
+  assert.equal(ui.titleSourceTag(song).label, "Title from lyrics");
+  assert.ok(search.getSearchMatchSummary(doc(song), "Title from"));
+  assert.ok(search.getSearchMatchSummary(doc(song), "Cold rain"));
+  const junk = t.resolveTitle("", "Lyrics\n# Song\nUnderstood \u2014 ignition confirmed.\n[Outro]", null);
+  assert.deepEqual(junk, { title: "", titleSource: "" });
+  const empty = { songKey: "j", ...junk };
+  assert.equal(ui.titleSourceTag(empty), null);
+  assert.ok(search.getSearchMatchSummary(doc(empty), "Untitled"));
+  assert.deepEqual(t.resolveTitle("Suno Name", "Lyrics", null), { title: "Suno Name", titleSource: "suno" });
+  assert.deepEqual(t.resolveTitle("", "Lyrics", { title: "Mine", source: "user" }), { title: "Mine", titleSource: "user" });
+});

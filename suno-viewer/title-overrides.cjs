@@ -26,6 +26,24 @@ const NOTE_RE = /^[A-Za-z][A-Za-z /&+'-]{0,30}:\s/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
 
+// Cautious "Title from lyrics": lines that are clearly not sung lyrics are skipped, and the
+// first real lyric line below them is used. When nothing is clearly a lyric the song stays
+// Untitled, which is easy to see, search and fix (Thomas's rule).
+const HEADING_RE = /^#+/;
+const LABEL_RE = /^(?:(?:the|full|final|song|new)\s+)?(?:lyrics?|song|title|track|untitled|chorus|verse|intro|outro|hook|bridge)(?:\s+(?:lyrics?|below|here))?$/i;
+const FILLER_RE = /^(?:(?:now|so|ok(?:ay)?|and)[\s,]+)?(?:(?:the|your|my|full|final)\s+)*(?:song|lyrics|track)s?$/i;
+const CHATTER_RE = /^(?:here(?:'s|\u2019s|\s+is|\s+are)|understood|below\s+is|as\s+requested|great\s+question|absolutely|certainly|of\s+course|got\s+it|sure|okay|ok)\b/i;
+const COUNT_RE = /\b\d[\d,.]*\s*-?\s*(?:characters?|chars?)\b|\bcharacter\s+(?:count|limit)\b/i;
+
+function isJunkLyricLine(line, limit = LYRIC_TITLE_MAX) {
+  if (Array.from(line).length > limit) return true;
+  const letters = (line.match(/\p{L}/gu) || []).length;
+  const visible = line.replace(/\s+/g, "").length;
+  const alnum = (line.match(/[\p{L}\p{N}]/gu) || []).length;
+  if (letters < 2 || alnum / visible < 0.6) return true;
+  return LABEL_RE.test(line) || FILLER_RE.test(line) || CHATTER_RE.test(line) || COUNT_RE.test(line);
+}
+
 function count(text, ch) { return text.split(ch).length - 1; }
 
 function cleanTitle(value, limit = TITLE_MAX) {
@@ -41,17 +59,13 @@ function pickLyricTitle(lyrics, limit = LYRIC_TITLE_MAX) {
   for (const raw of text.split("\n")) {
     let line = raw.trim();
     if (!line) continue;
+    if (HEADING_RE.test(line)) continue;
     if (count(line, "[") !== count(line, "]") || count(line, "(") !== count(line, ")")) continue;
     line = stripEdges(cleanTitle(line.replace(BRACKETED_RE, " ")));
     if (line.endsWith(".") && !/\b\w\.\w\.$/.test(line)) line = line.replace(/\.+$/, "").trim();
     if (!line || !/[A-Za-z0-9]/.test(line)) continue;
     if (SECTION_RE.test(line) || NOTE_RE.test(line)) continue;
-    const chars = Array.from(line); // code points, to match Python's len()
-    if (chars.length > limit) {
-      const cut = chars.slice(0, limit).join("");
-      const word = cut.includes(" ") ? cut.slice(0, cut.lastIndexOf(" ")).replace(/[ ,;:-]+$/, "") : "";
-      line = (word || cut) + "…";
-    }
+    if (isJunkLyricLine(line, limit)) continue;
     return line;
   }
   return "";
@@ -359,6 +373,7 @@ module.exports = {
   TITLE_MAX,
   LYRIC_TITLE_MAX,
   cleanTitle,
+  isJunkLyricLine,
   pickLyricTitle,
   resolveTitle,
   validateTitle,

@@ -40,6 +40,14 @@ export function titleSourceTag(song: TitledSong | null | undefined): IssueTag | 
   return TITLE_SOURCE_TAGS[String(song?.titleSource || '')] || null
 }
 
+// What search should see for a song's title: the title shown on the card (including the
+// "Untitled" fallback) plus any best-guess tag label, so "Untitled", "Best guess" and
+// "Title from lyrics" all find the songs the user can see with those words.
+export function titleSearchTerms(song: TitledSong | null | undefined): { title: string; tags: string[] } {
+  const title = String(song?.title || '').trim() || 'Untitled'
+  const tag = titleSourceTag(song)
+  return { title, tags: tag ? [tag.label] : [] }
+}
 export function applyTitleEdits<T extends TitledSong>(rows: T[], edits: Record<string, TitleEdit>): T[] {
   if (!Object.keys(edits).length) return rows
   return rows.map(row => {

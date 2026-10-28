@@ -8,7 +8,7 @@ import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
 import { issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity as songHasVaultIdentity, type IssueTag } from '../lib/issue-tags'
 import { createCsvStreamParser } from '../lib/csv-stream'
-import { TITLE_MAX, applyTitleEdits, createTitleEditor, readTitleResponse, titleSourceTag, validateTitleInput, type TitleEdit, type TitleSaveResult } from '../lib/title-edit'
+import { TITLE_MAX, applyTitleEdits, createTitleEditor, readTitleResponse, titleSearchTerms, titleSourceTag, validateTitleInput, type TitleEdit, type TitleSaveResult } from '../lib/title-edit'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
   vanessa_primary: ['vanessa_primary', 'unshakableechos2341', 'suno_unshakableechos2341'],
@@ -4050,8 +4050,9 @@ export default function VaultGrid() {
     const matchMap = new Map<string, SearchMatchSummary>()
     if (!search.trim()) return matchMap
     songs.forEach(song => {
+      const titleTerms = titleSearchTerms(song)
       const match = getSearchMatchSummary({
-        title: song.title,
+        title: titleTerms.title,
         account: [
           canonicalAccount(song),
           song.account_label,
@@ -4059,7 +4060,7 @@ export default function VaultGrid() {
           song.account_sourceId,
         ].filter(isNonEmptyString),
         styles: [song.styleText, song.styles, ...styleTokensForSong(song)].filter(isNonEmptyString),
-        tags: [song.displayTags, song.tags].filter(isNonEmptyString),
+        tags: [song.displayTags, song.tags, ...titleTerms.tags].filter(isNonEmptyString),
         lyrics: formatLyricsText(song.lyrics),
       }, search)
       if (match && song.songKey) {

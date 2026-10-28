@@ -115,3 +115,25 @@ test("every card view uses the same editable title", () => {
   assert.doesNotMatch(songCard + catalogRow, /\{song\.title \|\| 'Untitled'\}/);
   assert.match(src, /<TitleEditContext\.Provider value=\{titleEditApi\}>/);
 });
+
+test("search sees the displayed title, the Untitled fallback and best-guess tag labels", () => {
+  const search = require("../search-utils");
+  const doc = song => { const t = ui.titleSearchTerms(song); return { title: t.title, account: [], styles: [], tags: t.tags, lyrics: "" }; };
+  const untitled = { songKey: "u", title: "", titleSource: "" };
+  const lyric = { songKey: "l", title: "Verse 1", titleSource: "lyrics" };
+  const guess = { songKey: "g", title: "Old Name", titleSource: "old_file" };
+  const normal = { songKey: "n", title: "Fever Dream", titleSource: "suno" };
+  assert.deepEqual(ui.titleSearchTerms(untitled), { title: "Untitled", tags: [] });
+  assert.ok(search.getSearchMatchSummary(doc(untitled), "Untitled"));
+  assert.ok(search.getSearchMatchSummary(doc(lyric), "Title from lyrics"));
+  assert.ok(search.getSearchMatchSummary(doc(guess), "Best guess"));
+  assert.ok(search.getSearchMatchSummary(doc(guess), "Old Name"));
+  assert.equal(search.getSearchMatchSummary(doc(normal), "Untitled"), null);
+  assert.equal(search.getSearchMatchSummary(doc(normal), "Title from lyrics"), null);
+});
+
+test("Vault grid search uses titleSearchTerms", () => {
+  const grid = fs.readFileSync(path.join(__dirname, "..", "src/components/VaultGrid.tsx"), "utf8");
+  assert.match(grid, /title: titleTerms\.title,/);
+  assert.match(grid, /\.\.\.titleTerms\.tags\]/);
+});

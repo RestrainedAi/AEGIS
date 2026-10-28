@@ -8,6 +8,7 @@ import { SUNDROP_VAULT_NAME } from '../lib/branding'
 import { getSearchMatchSummary, type SearchMatchSummary } from '../lib/search-utils'
 import { issueTagsForSong, songHasIssues, isRemovedFromSuno, hasRenderableVaultIdentity as songHasVaultIdentity, type IssueTag } from '../lib/issue-tags'
 import { createCsvStreamParser } from '../lib/csv-stream'
+import { defaultChannelForAccount, priorPublishLines, queueMetaForRequest, type PriorPublish, type PublishChannelOption } from '../lib/publish-ui'
 import { TITLE_MAX, applyTitleEdits, createTitleEditor, readTitleResponse, titleSearchTerms, titleSourceTag, validateTitleInput, type TitleEdit, type TitleSaveResult } from '../lib/title-edit'
 
 const ACCOUNT_ALIASES: Record<string, string[]> = {
@@ -50,6 +51,7 @@ interface YtMeta {
   privacy: YtPrivacy
   shortsRemixing: boolean
   category: string
+  channel: string           // linked YouTube channel key (per user); '' = none picked
 }
 
 const DEFAULT_YT_META: YtMeta = {
@@ -61,9 +63,10 @@ const DEFAULT_YT_META: YtMeta = {
   alteredContent: true,      // AI-generated content: default to true
   language: 'en',
   license: 'youtube',
-  privacy: 'public',
+  privacy: 'private',        // safe default: nothing goes public by accident
   shortsRemixing: true,
   category: '10',            // Music
+  channel: '',
 }
 
 const YT_CATEGORIES: { value: string; label: string }[] = [
@@ -949,17 +952,29 @@ function YtMetadataModal({
   onConfirm,
   onCancel,
   onSaveDefaults,
+  onResetDefaults,
+  channels,
+  defaultChannel,
+  batchCount,
 }: {
   song: SunoSong
   defaults: YtMeta
   onConfirm: (meta: YtMeta) => void
   onCancel: () => void
   onSaveDefaults: (meta: YtMeta) => void
+  onResetDefaults: () => Promise<YtMeta | null>
+  channels: PublishChannelOption[]
+  defaultChannel: string
+  batchCount: number          // > 1 means batch mode
 }) {
+  const isBatch = batchCount > 1
   const titlePreview = buildYouTubeTitlePreview(song)
   const tagsPreview = buildYouTubeTagsPreview(song)
-  const suggestedMeta = buildSuggestedYtMeta(song, defaults)
+  const suggestedMeta = { ...buildSuggestedYtMeta(song, defaults), channel: defaultChannel }
   const [meta, setMeta] = useState<YtMeta>(suggestedMeta)
+  const [resetNote, setResetNote] = useState('')
+  const usableChannels = channels.filter(c => c.enabled !== false)
+  const channelMissing = !meta.channel
 
   const set = <K extends keyof YtMeta>(k: K, v: YtMeta[K]) =>
     setMeta(prev => ({ ...prev, [k]: v }))
@@ -981,7 +996,15 @@ function YtMetadataModal({
   }
 
   const resetToSuggested = () => {
-    setMeta(buildSuggestedYtMeta(song, defaults))
+    setMeta(prev => ({ ...buildSuggestedYtMeta(song, defaults), channel: prev.channel }))
+  }
+
+  const returnToDefault = async () => {
+    const next = await onResetDefaults()
+    if (next) {
+      setMeta(prev => ({ ...buildSuggestedYtMeta(song, next), channel: prev.channel }))
+      setResetNote('Your saved defaults were cleared. The system defaults now apply.')
+    }
   }
 
   const inputStyle: CSSProperties = {
@@ -1028,13 +1051,40 @@ function YtMetadataModal({
             YouTube Publish Settings
           </div>
           <div style={{ color: '#e0e0f0', fontSize: 16, fontWeight: 700 }}>
-            {song.title || 'Untitled'}
+            {isBatch ? `${batchCount} songs selected` : (song.title || 'Untitled')}
           </div>
           <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>
             Customize before publishing — or save as new defaults
           </div>
         </div>
 
+        {/* Channel picker: defaults to the Suno account's channel; no silent fallback */}
+        <div style={rowStyle}>
+          <label style={labelStyle}>YouTube Channel</label>
+          <select
+            value={meta.channel}
+            onChange={e => set('channel', e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">— Pick a channel —</option>
+            {usableChannels.map(c => (
+              <option key={c.key} value={c.key}>{c.name}{c.key === defaultChannel ? ' (account default)' : ''}</option>
+            ))}
+          </select>
+          <div style={{ color: channelMissing ? '#ff9a9a' : '#666699', fontSize: 11, marginTop: 6 }}>
+            {usableChannels.length === 0
+              ? 'No YouTube channel is linked to your account yet, so publishing is blocked.'
+              : channelMissing
+              ? (isBatch
+                ? 'Pick a channel for this batch. Songs whose account has no channel are never sent anywhere by default.'
+                : 'This song\'s Suno account has no default channel. Pick one, or publishing stays blocked.')
+              : isBatch
+              ? 'Applies to every song in this batch.'
+              : 'Defaults to this song\'s Suno account channel.'}
+          </div>
+        </div>
+
+        {!isBatch && (<>
         {/* Description */}
         <div style={rowStyle}>
           <label style={labelStyle}>Publish Title</label>
@@ -1063,6 +1113,13 @@ function YtMetadataModal({
             Derived from description or caption first, then styles, then a short lyrics excerpt. The raw Suno prompt stays preserved in the Vault and is not auto-published.
           </div>
         </div>
+
+        </>)}
+        {isBatch && (
+          <div style={{ ...rowStyle, color: '#9999cc', fontSize: 12 }}>
+            Batch mode: each song keeps its own title, description and tags. Only group settings are shown.
+          </div>
+        )}
 
         <div style={rowStyle}>
           <label style={labelStyle}>Lyrics in Description</label>
@@ -1132,6 +1189,7 @@ function YtMetadataModal({
           </div>
         </div>
 
+        {!isBatch && (
         <div style={rowStyle}>
           <label style={labelStyle}>Publish Tags</label>
           <textarea
@@ -1145,6 +1203,7 @@ function YtMetadataModal({
             Pre-filled from normalized styles plus core identity fields. Editing here changes the YouTube publish copy only; original Suno tags remain untouched in the Vault.
           </div>
         </div>
+        )}
 
         {/* Privacy + Category row */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -1244,8 +1303,27 @@ function YtMetadataModal({
           ))}
         </div>
 
+        {resetNote && <div style={{ color: '#9fe0b0', fontSize: 12, marginBottom: 10 }}>{resetNote}</div>}
+
         {/* Actions */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => { void returnToDefault() }}
+            style={{
+              background: '#12121f',
+              border: '1px solid #4b4b73',
+              borderRadius: 8,
+              color: '#d3d3f5',
+              fontSize: 13,
+              padding: '10px 16px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+            title="Clear your saved publish defaults and use the system defaults"
+          >
+            Return to default
+          </button>
           <button
             type="button"
             onClick={resetToSuggested}
@@ -1265,7 +1343,10 @@ function YtMetadataModal({
           </button>
           <button
             onClick={() => onConfirm(meta)}
+            disabled={channelMissing}
+            title={channelMissing ? 'Pick a YouTube channel first' : undefined}
             style={{
+              opacity: channelMissing ? 0.5 : 1,
               background: '#a32626',
               border: 'none',
               borderRadius: 8,
@@ -1281,6 +1362,7 @@ function YtMetadataModal({
           </button>
           <button
             onClick={() => { onSaveDefaults(meta); onConfirm(meta) }}
+            disabled={channelMissing}
             style={{
               background: '#1a1a40',
               border: '1px solid #7c6fff',
@@ -1291,7 +1373,7 @@ function YtMetadataModal({
               cursor: 'pointer',
               whiteSpace: 'nowrap',
             }}
-            title="Save these settings as channel defaults and publish"
+            title="Save these settings on the server as your defaults, then publish"
           >
             Save as Defaults & Publish
           </button>
@@ -2110,18 +2192,74 @@ const catalogPublishButtonStyle: CSSProperties = {
 // localStorage key for channel defaults
 const LS_YT_DEFAULTS = 'sundrop_yt_defaults_v1'
 
+// Publish defaults live on the server (publishDefaults/system + users/{uid}/publishDefaults).
+// The old browser-only copy is cleared so it can never override the server set.
 function loadDefaults(): YtMeta {
-  try {
-    const raw = localStorage.getItem(LS_YT_DEFAULTS)
-    if (raw) return { ...DEFAULT_YT_META, ...JSON.parse(raw) }
-  } catch { /* ignore */ }
+  try { localStorage.removeItem(LS_YT_DEFAULTS) } catch { /* ignore */ }
   return { ...DEFAULT_YT_META }
 }
 
-function saveDefaults(meta: YtMeta) {
-  try {
-    localStorage.setItem(LS_YT_DEFAULTS, JSON.stringify(channelDefaultsOnly(meta)))
-  } catch { /* ignore */ }
+const accountCandidatesForSong = (song: SunoSong): string[] => {
+  const src = String(song.account_sourceId || '')
+  return [...new Set([
+    canonicalAccount(song),
+    song.account_label,
+    song.account_handle,
+    src.toLowerCase().startsWith('suno_') ? src.slice(5) : '',
+  ].map(v => String(v || '').trim()).filter(Boolean))]
+}
+
+interface PublishSettings {
+  channels: PublishChannelOption[]
+  accountDefaults: Record<string, string>
+}
+
+interface PublishWarningState {
+  items: { song: SunoSong; prior: PriorPublish }[]
+  meta: YtMeta
+  isBatch: boolean
+}
+
+function PublishWarningModal({ warning, onCancel, onProceed }: {
+  warning: PublishWarningState
+  onCancel: () => void
+  onProceed: () => void
+}) {
+  const canProceed = warning.items.some(i => i.prior.state === 'on_youtube')
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#16162a', border: '1px solid #4b4b73', borderRadius: 12, padding: 24, width: 'min(560px, 92vw)', maxHeight: '80vh', overflowY: 'auto' }}>
+        <div style={{ color: '#ffd27a', fontSize: 16, fontWeight: 700, marginBottom: 12 }}>
+          {warning.items.length === 1 ? 'This song was published before' : `${warning.items.length} songs were published or queued before`}
+        </div>
+        {warning.items.map(({ song, prior }) => (
+          <div key={song.songKey} style={{ marginBottom: 14, color: '#d3d3f5', fontSize: 13 }}>
+            <div style={{ fontWeight: 600 }}>{song.title || 'Untitled'}</div>
+            {priorPublishLines(prior).map((line, idx) => (
+              line.startsWith('Video: ') && prior.details?.url
+                ? <div key={idx}>Video: <a href={prior.details.url} target="_blank" rel="noreferrer" style={{ color: '#9fb4ff' }}>{prior.details.url}</a></div>
+                : <div key={idx}>{line}</div>
+            ))}
+          </div>
+        ))}
+        <div style={{ color: '#9999cc', fontSize: 12, marginBottom: 14 }}>
+          {canProceed
+            ? 'Publishing again makes a second YouTube video. Songs already in the queue are left as they are.'
+            : 'These songs are already in the queue, so nothing new will be added.'}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, background: '#1a1a40', border: '1px solid #7c6fff', borderRadius: 8, color: '#d3d3f5', padding: '10px 16px', cursor: 'pointer' }}>
+            Cancel
+          </button>
+          {canProceed && (
+            <button onClick={onProceed} style={{ background: '#a32626', border: 'none', borderRadius: 8, color: '#fff', padding: '10px 16px', cursor: 'pointer' }}>
+              Publish again anyway
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function channelDefaultsOnly(meta: YtMeta): YtMeta {
@@ -2845,6 +2983,9 @@ export default function VaultGrid() {
   // YouTube metadata state
   const [channelDefaults, setChannelDefaults] = useState<YtMeta>(loadDefaults)
   const [pendingSong, setPendingSong] = useState<SunoSong | null>(null)  // song awaiting modal
+  const [publishSettings, setPublishSettings] = useState<PublishSettings>({ channels: [], accountDefaults: {} })
+  const [batchQueue, setBatchQueue] = useState<SunoSong[]>([])
+  const [publishWarning, setPublishWarning] = useState<PublishWarningState | null>(null)
 
   // Job banner / polling state
   const [jobBanner, setJobBanner] = useState<JobBannerState | null>(null)
@@ -3542,7 +3683,7 @@ export default function VaultGrid() {
   const queueAndPublish = useCallback(async (
     song: SunoSong,
     meta: YtMeta,
-    options?: { triggerUploadJob?: boolean }
+    options?: { triggerUploadJob?: boolean; confirmRepublish?: boolean }
   ) => {
     const shouldAttemptTrigger = options?.triggerUploadJob !== false
     setYtStatus(prev => ({ ...prev, [song.songKey]: { status: 'queued' } }))
@@ -3554,19 +3695,9 @@ export default function VaultGrid() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           songKey:         song.songKey,
-          ytMeta: {
-            title:          meta.title,
-            description:    meta.description,
-            tags:           meta.tags,
-            promptPolicy:   meta.promptPolicy,
-            lyricsPolicy:   meta.lyricsPolicy,
-            alteredContent: meta.alteredContent,
-            language:       meta.language,
-            license:        meta.license,
-            privacy:        meta.privacy,
-            shortsRemixing: meta.shortsRemixing,
-            category:       meta.category,
-          },
+          channel:         meta.channel,
+          confirmRepublish: Boolean(options?.confirmRepublish),
+          ytMeta:          queueMetaForRequest(meta, false),
         }),
       })
       const data = await res.json()
@@ -3636,22 +3767,89 @@ export default function VaultGrid() {
     setPendingSong(song)
   }, [])
 
+  // Ask the server whether songs are already on YouTube or queued (for the chosen channel).
+  const precheckSongs = useCallback(async (songsToCheck: SunoSong[], channel: string) => {
+    const warnings: { song: SunoSong; prior: PriorPublish }[] = []
+    try {
+      const res = await authFetch('/api/publish/precheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songKeys: songsToCheck.map(s => s.songKey), channel }),
+      })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        for (const song of songsToCheck) {
+          const prior = data.results?.[song.songKey] as PriorPublish | undefined
+          if (prior && ['on_youtube', 'queued', 'uploading'].includes(prior.state)) warnings.push({ song, prior })
+        }
+      }
+    } catch { /* the server re-checks at queue time anyway */ }
+    return warnings
+  }, [])
+
   const handleMetaConfirm = useCallback((meta: YtMeta) => {
     if (!pendingSong) return
     const song = pendingSong
     setPendingSong(null)
-    queueAndPublish(song, meta)
-  }, [pendingSong, queueAndPublish])
+    void (async () => {
+      const warnings = await precheckSongs([song], meta.channel)
+      if (warnings.length > 0) {
+        setPublishWarning({ items: warnings, meta, isBatch: false })
+        return
+      }
+      queueAndPublish(song, meta)
+    })()
+  }, [pendingSong, precheckSongs, queueAndPublish])
+
+  const loadPublishSettings = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/publish/settings')
+      const data = await res.json()
+      if (!res.ok || !data.ok) return
+      setPublishSettings({ channels: data.channels || [], accountDefaults: data.accountDefaults || {} })
+      const effective = data.defaults?.effective || {}
+      setChannelDefaults({ ...DEFAULT_YT_META, ...effective, channel: '' })
+    } catch { /* keep safe built-in defaults (private) */ }
+  }, [])
+
+  useEffect(() => {
+    if (session?.isAuthenticated) void loadPublishSettings()
+  }, [loadPublishSettings, session?.isAuthenticated])
 
   const handleSaveDefaults = useCallback((meta: YtMeta) => {
-    const nextDefaults = channelDefaultsOnly(meta)
+    const nextDefaults = { ...channelDefaultsOnly(meta), channel: '' }
     setChannelDefaults(nextDefaults)
-    saveDefaults(nextDefaults)
+    void authFetch('/api/publish/defaults', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ defaults: queueMetaForRequest(nextDefaults, true) }),
+    }).catch(() => { /* non-fatal */ })
   }, [])
+
+  const handleResetDefaults = useCallback(async (): Promise<YtMeta | null> => {
+    try {
+      const res = await authFetch('/api/publish/defaults', { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) return null
+      const next = { ...DEFAULT_YT_META, ...(data.defaults?.effective || {}), channel: '' }
+      setChannelDefaults(next)
+      return next
+    } catch {
+      return null
+    }
+  }, [])
+
+  const pendingDefaultChannel = useMemo(() => {
+    if (!pendingSong) return ''
+    const songsInPlay = [pendingSong, ...batchQueue]
+    const picks = new Set(songsInPlay.map(s =>
+      defaultChannelForAccount(accountCandidatesForSong(s), publishSettings.accountDefaults, publishSettings.channels)))
+    // A batch only gets a preselected channel when every song's account agrees.
+    return picks.size === 1 ? [...picks][0] : ''
+  }, [pendingSong, batchQueue, publishSettings])
 
   // ── Batch publish selected ─────────────────────────────────────────────────
   // Opens modal for first selected song; saves defaults and applies to all.
-  const [batchQueue, setBatchQueue] = useState<SunoSong[]>([])
   const [batchSelectedCount, setBatchSelectedCount] = useState(0)
 
   const loadQueueCounts = useCallback(async () => {
@@ -3873,6 +4071,7 @@ export default function VaultGrid() {
   const queueSongForYouTube = useCallback(async (
     song: SunoSong,
     meta: YtMeta,
+    options?: { confirmRepublish?: boolean; isBatch?: boolean },
   ): Promise<QueueRequestResult> => {
     setYtStatus(prev => ({ ...prev, [song.songKey]: { status: 'queued' } }))
 
@@ -3883,19 +4082,9 @@ export default function VaultGrid() {
         body: JSON.stringify({
           songKey:         song.songKey,
           retryExistingError: true,
-          ytMeta: {
-            title:          meta.title,
-            description:    meta.description,
-            tags:           meta.tags,
-            promptPolicy:   meta.promptPolicy,
-            lyricsPolicy:   meta.lyricsPolicy,
-            alteredContent: meta.alteredContent,
-            language:       meta.language,
-            license:        meta.license,
-            privacy:        meta.privacy,
-            shortsRemixing: meta.shortsRemixing,
-            category:       meta.category,
-          },
+          channel:         meta.channel,
+          confirmRepublish: Boolean(options?.confirmRepublish),
+          ytMeta:          queueMetaForRequest(meta, Boolean(options?.isBatch)),
         }),
       })
       const data = await res.json()
@@ -3966,16 +4155,15 @@ export default function VaultGrid() {
     setPendingSong(queue[0])
   }, [publishEntitled, songs, selected, ytStatus])
 
-  const handleBatchMetaConfirm = useCallback((meta: YtMeta) => {
-    if (!pendingSong) return
-    const first = pendingSong
-    const remaining = batchQueue
-    const selectedCount = batchSelectedCount || (1 + remaining.length)
-    setPendingSong(null)
-    setBatchQueue([])
-
+  const runBatchPublish = useCallback((
+    songsToPublish: SunoSong[],
+    meta: YtMeta,
+    selectedCount: number,
+    confirmKeys: Set<string>,
+  ) => {
+    const [first, ...remaining] = songsToPublish
+    if (!first) return
     void (async () => {
-      handleSaveDefaults(meta)
 
       const submission = {
         selected: selectedCount,
@@ -3990,7 +4178,7 @@ export default function VaultGrid() {
       let shouldTriggerUpload = false
       for (const song of [first, ...remaining]) {
         try {
-          const result = await queueSongForYouTube(song, meta)
+          const result = await queueSongForYouTube(song, meta, { isBatch: true, confirmRepublish: confirmKeys.has(song.songKey) })
           if (result.created) {
             submission.newlyQueued += 1
           } else if (result.shouldTriggerUpload && result.status === 'queued') {
@@ -4035,7 +4223,40 @@ export default function VaultGrid() {
         }, DONE_HOLD_MS)
       }
     })()
-  }, [pendingSong, batchQueue, batchSelectedCount, handleSaveDefaults, loadQueueCounts, queueSongForYouTube, scheduleNextPoll, triggerUploadJob])
+  }, [loadQueueCounts, queueSongForYouTube, scheduleNextPoll, triggerUploadJob])
+
+  const handleBatchMetaConfirm = useCallback((meta: YtMeta) => {
+    if (!pendingSong) return
+    const all = [pendingSong, ...batchQueue]
+    const selectedCount = batchSelectedCount || all.length
+    setPendingSong(null)
+    setBatchQueue([])
+    void (async () => {
+      const warnings = await precheckSongs(all, meta.channel)
+      if (warnings.length > 0) {
+        setPublishWarning({ items: warnings, meta, isBatch: true })
+        // Songs without a warning go ahead now; flagged ones wait for the user's choice.
+        const flagged = new Set(warnings.map(w => w.song.songKey))
+        const clean = all.filter(s => !flagged.has(s.songKey))
+        if (clean.length > 0) runBatchPublish(clean, meta, selectedCount, new Set())
+        return
+      }
+      runBatchPublish(all, meta, selectedCount, new Set())
+    })()
+  }, [pendingSong, batchQueue, batchSelectedCount, precheckSongs, runBatchPublish])
+
+  const handleWarningProceed = useCallback(() => {
+    if (!publishWarning) return
+    const { items, meta, isBatch } = publishWarning
+    setPublishWarning(null)
+    const again = items.filter(i => i.prior.state === 'on_youtube').map(i => i.song)
+    if (again.length === 0) return
+    if (isBatch) {
+      runBatchPublish(again, meta, again.length, new Set(again.map(s => s.songKey)))
+    } else {
+      queueAndPublish(again[0], meta, { confirmRepublish: true })
+    }
+  }, [publishWarning, queueAndPublish, runBatchPublish])
 
   const accounts = useMemo(() => {
     const s = new Set(songs.map(canonicalAccount).filter(Boolean))
@@ -4859,6 +5080,18 @@ export default function VaultGrid() {
           onConfirm={batchQueue.length > 0 ? handleBatchMetaConfirm : handleMetaConfirm}
           onCancel={() => { setPendingSong(null); setBatchQueue([]) }}
           onSaveDefaults={handleSaveDefaults}
+          onResetDefaults={handleResetDefaults}
+          channels={publishSettings.channels}
+          defaultChannel={pendingDefaultChannel}
+          batchCount={1 + batchQueue.length}
+        />
+      )}
+
+      {publishWarning && (
+        <PublishWarningModal
+          warning={publishWarning}
+          onCancel={() => setPublishWarning(null)}
+          onProceed={handleWarningProceed}
         />
       )}
 

@@ -949,6 +949,48 @@ function JobBanner({
 
 
 // ── YouTube Metadata Modal ────────────────────────────────────────────────────
+function PublishWarningModal({ warning, onCancel, onProceed }: {
+  warning: PublishWarningState
+  onCancel: () => void
+  onProceed: () => void
+}) {
+  const canProceed = warning.items.some(i => i.prior.state === 'on_youtube')
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#16162a', border: '1px solid #4b4b73', borderRadius: 12, padding: 24, width: 'min(560px, 92vw)', maxHeight: '80vh', overflowY: 'auto' }}>
+        <div style={{ color: '#ffd27a', fontSize: 16, fontWeight: 700, marginBottom: 12 }}>
+          {warning.items.length === 1 ? 'This song was published before' : `${warning.items.length} songs were published or queued before`}
+        </div>
+        {warning.items.map(({ song, prior }) => (
+          <div key={song.songKey} style={{ marginBottom: 14, color: '#d3d3f5', fontSize: 13 }}>
+            <div style={{ fontWeight: 600 }}>{song.title || 'Untitled'}</div>
+            {priorPublishLines(prior).map((line, idx) => (
+              line.startsWith('Video: ') && prior.details?.url
+                ? <div key={idx}>Video: <a href={prior.details.url} target="_blank" rel="noreferrer" style={{ color: '#9fb4ff' }}>{prior.details.url}</a></div>
+                : <div key={idx}>{line}</div>
+            ))}
+          </div>
+        ))}
+        <div style={{ color: '#9999cc', fontSize: 12, marginBottom: 14 }}>
+          {canProceed
+            ? 'Publishing again makes a second YouTube video. Songs already in the queue are left as they are.'
+            : 'These songs are already in the queue, so nothing new will be added.'}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, background: '#1a1a40', border: '1px solid #7c6fff', borderRadius: 8, color: '#d3d3f5', padding: '10px 16px', cursor: 'pointer' }}>
+            Cancel
+          </button>
+          {canProceed && (
+            <button onClick={onProceed} style={{ background: '#a32626', border: 'none', borderRadius: 8, color: '#fff', padding: '10px 16px', cursor: 'pointer' }}>
+              Publish again anyway
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function YtMetadataModal({
   song,
   defaults,
@@ -2216,47 +2258,6 @@ interface PublishWarningState {
   isBatch: boolean
 }
 
-function PublishWarningModal({ warning, onCancel, onProceed }: {
-  warning: PublishWarningState
-  onCancel: () => void
-  onProceed: () => void
-}) {
-  const canProceed = warning.items.some(i => i.prior.state === 'on_youtube')
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#16162a', border: '1px solid #4b4b73', borderRadius: 12, padding: 24, width: 'min(560px, 92vw)', maxHeight: '80vh', overflowY: 'auto' }}>
-        <div style={{ color: '#ffd27a', fontSize: 16, fontWeight: 700, marginBottom: 12 }}>
-          {warning.items.length === 1 ? 'This song was published before' : `${warning.items.length} songs were published or queued before`}
-        </div>
-        {warning.items.map(({ song, prior }) => (
-          <div key={song.songKey} style={{ marginBottom: 14, color: '#d3d3f5', fontSize: 13 }}>
-            <div style={{ fontWeight: 600 }}>{song.title || 'Untitled'}</div>
-            {priorPublishLines(prior).map((line, idx) => (
-              line.startsWith('Video: ') && prior.details?.url
-                ? <div key={idx}>Video: <a href={prior.details.url} target="_blank" rel="noreferrer" style={{ color: '#9fb4ff' }}>{prior.details.url}</a></div>
-                : <div key={idx}>{line}</div>
-            ))}
-          </div>
-        ))}
-        <div style={{ color: '#9999cc', fontSize: 12, marginBottom: 14 }}>
-          {canProceed
-            ? 'Publishing again makes a second YouTube video. Songs already in the queue are left as they are.'
-            : 'These songs are already in the queue, so nothing new will be added.'}
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, background: '#1a1a40', border: '1px solid #7c6fff', borderRadius: 8, color: '#d3d3f5', padding: '10px 16px', cursor: 'pointer' }}>
-            Cancel
-          </button>
-          {canProceed && (
-            <button onClick={onProceed} style={{ background: '#a32626', border: 'none', borderRadius: 8, color: '#fff', padding: '10px 16px', cursor: 'pointer' }}>
-              Publish again anyway
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function channelDefaultsOnly(meta: YtMeta): YtMeta {
   return {
